@@ -185,7 +185,7 @@ function renderAccountSources() {
   }
   container.innerHTML = state.accountSources.map((source) => {
     const actions = [];
-    if (source.id === "chatgpt-codex") actions.push(`<button class="button button-quiet" data-open-chatgpt>Open ChatGPT</button>`);
+    if (source.id === "chatgpt-codex") actions.push(`<button class="button button-quiet" data-open-chatgpt>Open Codex Cloud</button>`);
     if (source.telemetry === "available") actions.push(`<button class="button button-quiet" data-load-api-source>Load usage</button>`);
     if (source.telemetry === "not-configured") actions.push(`<button class="button button-quiet" data-add-api-source>Add source</button>`);
     if (source.removable) actions.push(`<button class="button button-danger table-action" data-remove-api-source="${escapeHtml(source.id)}">Remove</button>`);
@@ -328,7 +328,7 @@ function describeAuditEvent(event) {
     "codex-session-quarantined": "Local session quarantined",
     "codex-session-restored": "Local session restored",
     "handoff-exported": "Handoff created",
-    "handoff-transfer-prepared": "Context prepared for Codex / ChatGPT",
+    "handoff-transfer-prepared": "Context prepared for Codex Cloud",
     "local-branch-deleted": "Local branch deleted",
     "local-branch-restored": "Local branch restored",
     "remote-branch-deleted": "Remote branch deleted",
@@ -478,9 +478,9 @@ async function openChatGpt() {
   if (!window.codexGuard?.openChatGpt) return showToast("Electron bridge is not available.");
   try {
     await window.codexGuard.openChatGpt();
-    showToast("Opened ChatGPT in your default browser.");
+    showToast("Opened Codex Cloud in your default browser.");
   } catch {
-    showToast("Could not open ChatGPT in your default browser.");
+    showToast("Could not open Codex Cloud in your default browser.");
   }
 }
 
@@ -940,7 +940,8 @@ async function exportHandoff(event) {
     });
     closeHandoffDialog();
     await Promise.all([loadHandoffs(), loadAuditEvents()]);
-    showToast(result.contextPrepared ? `Saved ${result.fileName}. Context prompt copied; choose a task, paste it, and press Enter.` : `Saved ${result.fileName}.`);
+    if (result.contextPrepared) showTransferReadyDialog(result.fileName);
+    else showToast(`Saved ${result.fileName}.`);
   } catch {
     showToast("Could not export the handoff report.");
   } finally {
@@ -968,7 +969,7 @@ async function importHandoff() {
   try {
     const result = await window.codexGuard.importHandoff();
     if (result.cancelled) return showToast("Handoff import cancelled.");
-    showToast("Context prompt copied. Choose a task, paste it, and press Enter.");
+    showTransferReadyDialog(result.fileName);
   } catch {
     showToast("Could not prepare that handoff document.");
   }
@@ -979,10 +980,20 @@ async function transferHandoff(fileName) {
   try {
     const result = await window.codexGuard.transferHandoff(fileName);
     await loadAuditEvents();
-    showToast(`${result.fileName}: context prompt copied. Choose a task, paste it, and press Enter.`);
+    showTransferReadyDialog(result.fileName);
   } catch {
     showToast("Could not prepare that saved handoff.");
   }
+}
+
+function showTransferReadyDialog(fileName) {
+  const dialog = $("#transfer-ready-dialog");
+  $("#transfer-ready-file").textContent = fileName ? `Ready: ${fileName}` : "Context is ready.";
+  if (!dialog.open) dialog.showModal();
+}
+
+function closeTransferReadyDialog() {
+  $("#transfer-ready-dialog").close();
 }
 
 async function quarantineSelectedSessions() {
@@ -1133,6 +1144,8 @@ $("#handoff-task").addEventListener("change", applySelectedHandoffTask);
 $("#cancel-handoff").addEventListener("click", closeHandoffDialog);
 $("#cancel-handoff-bottom").addEventListener("click", closeHandoffDialog);
 $("#handoff-dialog").addEventListener("close", () => $("#handoff-form").reset());
+$("#close-transfer-ready").addEventListener("click", closeTransferReadyDialog);
+$("#close-transfer-ready-bottom").addEventListener("click", closeTransferReadyDialog);
 $("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
 $("#refresh-audit").addEventListener("click", loadAuditEvents);
 $("#export-audit").addEventListener("click", exportAudit);

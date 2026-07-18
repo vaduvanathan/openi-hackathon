@@ -63,7 +63,7 @@ function createCodexContextPrompt({ handoff, filePath, intent = "transfer" }) {
 
 async function prepareCodexContext({ handoff, filePath, intent }) {
   clipboard.writeText(createCodexContextPrompt({ handoff, filePath, intent }));
-  await shell.openExternal("https://chatgpt.com/");
+  await shell.openExternal("https://chatgpt.com/codex/cloud");
 }
 
 async function readSavedHandoff(fileName) {
@@ -372,7 +372,7 @@ ipcMain.handle("account:remove-api-source", async (event, sourceId) => {
   });
   return { cancelled: false, source: removed };
 });
-ipcMain.handle("account:open-chatgpt", () => shell.openExternal("https://chatgpt.com/"));
+ipcMain.handle("account:open-chatgpt", () => shell.openExternal("https://chatgpt.com/codex/cloud"));
 ipcMain.handle("github:profiles", (_event, logins) => scanGitHubProfiles(logins));
 ipcMain.handle("github:cli-accounts", () => listGitHubCliAccounts());
 ipcMain.handle("github:cli-switch-account", async (_event, login) => switchGitHubCliAccount(login));
