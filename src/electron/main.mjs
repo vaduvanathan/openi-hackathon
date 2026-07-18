@@ -40,7 +40,7 @@ function auditPath() {
 }
 
 function handoffFileName() {
-  return `codex-handoff-${new Date().toISOString().replace(/[:.]/g, "-")}.md`;
+  return `managex-handoff-${new Date().toISOString().replace(/[:.]/g, "-")}.md`;
 }
 
 async function prepareChatGptHandoff(handoff) {
@@ -387,7 +387,7 @@ ipcMain.handle("audit:list", () => listAuditEvents(auditPath()));
 ipcMain.handle("audit:export", async () => {
   const events = await listAuditEvents(auditPath(), { limit: 200 });
   const directory = handoffDirectory();
-  const fileName = `codex-guard-audit-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  const fileName = `managex-audit-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   const filePath = path.join(directory, fileName);
   await mkdir(directory, { recursive: true });
   await writeFile(filePath, `${JSON.stringify({ exportedAt: new Date().toISOString(), events }, null, 2)}\n`, "utf8");

@@ -16,7 +16,7 @@ function formatTokens(tokens) {
 
 export function createHandoffReport({ brief, codex, repository, selectedTask, usage } = {}) {
   const lines = [
-    "# Codex Session Guard Handoff",
+    "# Managex Handoff",
     "",
     `Generated: ${new Date().toISOString()}`,
     "",

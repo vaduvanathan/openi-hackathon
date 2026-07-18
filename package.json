@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "author": "Vaduvanathan P",
-  "description": "Local observability and cleanup core for Codex coding workspaces.",
+  "description": "Managex is a local workspace observability and cleanup app for Codex coding workspaces.",
   "type": "module",
   "main": "src/electron/main.mjs",
   "scripts": {
@@ -21,7 +21,7 @@
   },
   "build": {
     "appId": "com.vaduvanathan.codexsessionguard",
-    "productName": "Codex Session Guard",
+    "productName": "Managex",
     "artifactName": "${productName}-${version}-setup.${ext}",
     "directories": {
       "output": "release"

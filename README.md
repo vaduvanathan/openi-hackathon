@@ -1,9 +1,9 @@
 # openi-hackathon
-OpenAI Build Week Hackathon project: Codex Session Guard
+OpenAI Build Week Hackathon project: Managex
 
-## Codex Session Guard
+## Managex
 
-Codex Session Guard helps developers safely switch Codex contexts by making local Codex state visible, generating clean handoff packages, and quarantining old sessions instead of deleting them.
+Managex helps developers safely switch Codex contexts by making local Codex state visible, generating clean handoff packages, and quarantining old sessions instead of deleting them.
 
 ## MVP Features
 
