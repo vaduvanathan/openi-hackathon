@@ -81,6 +81,20 @@ export async function deleteSafeLocalBranch(repoPath, branchName, {
   };
 }
 
+export async function deleteSafeLocalBranches(repoPath, branchNames, options = {}) {
+  const uniqueBranches = [...new Set((branchNames || []).map(validateBranchName))];
+  if (!uniqueBranches.length) throw new Error("Select at least one local branch to delete.");
+  const results = [];
+  for (const branch of uniqueBranches) {
+    try {
+      results.push({ branch, ...(await deleteSafeLocalBranch(repoPath, branch, options)) });
+    } catch (error) {
+      results.push({ branch, deleted: false, error: error.message });
+    }
+  }
+  return results;
+}
+
 export async function listLocalBranchRecoveryManifests(manifestDirectory) {
   return listRecoveryManifests(manifestDirectory, { type: "local-branch-recovery" });
 }

@@ -18,6 +18,15 @@ async function git(repoPath, args) {
   return (await runCommand("git", ["-C", repoPath, ...args])).stdout.trim();
 }
 
+async function refreshOrigin(repoPath) {
+  try {
+    await git(repoPath, ["fetch", "origin", "--prune"]);
+    return "synced";
+  } catch {
+    return "not-available";
+  }
+}
+
 async function getCurrentBranch(repoPath) {
   try {
     return await git(repoPath, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
@@ -78,6 +87,18 @@ async function getMergedBranches(repoPath, baseBranch) {
   return new Set(output.split(/\r?\n/).filter(Boolean));
 }
 
+async function getMergedRemoteBranches(repoPath, baseBranch) {
+  const remoteBase = `refs/remotes/origin/${baseBranch}`;
+  let mergeTarget = remoteBase;
+  try {
+    await git(repoPath, ["show-ref", "--verify", "--quiet", remoteBase]);
+  } catch {
+    mergeTarget = `refs/heads/${baseBranch}`;
+  }
+  const output = await git(repoPath, ["for-each-ref", "--format=%(refname:short)", "--merged", mergeTarget, "refs/remotes/origin"]);
+  return new Set(output.split(/\r?\n/).filter(Boolean));
+}
+
 function daysSince(dateValue, now) {
   const timestamp = Date.parse(dateValue);
   if (!Number.isFinite(timestamp)) return null;
@@ -86,17 +107,20 @@ function daysSince(dateValue, now) {
 
 export async function scanRepository(repoPath, {
   baseBranch,
+  refreshRemote = false,
   staleAfterDays = 30,
   protectedBranches = ["main", "master", "staging"],
   now = Date.now(),
 } = {}) {
+  const remoteSync = refreshRemote ? await refreshOrigin(repoPath) : "not-requested";
   const base = await getBaseBranch(repoPath, baseBranch);
-  const [currentBranch, localBranches, remoteBranches, worktrees, mergedBranches] = await Promise.all([
+  const [currentBranch, localBranches, remoteBranches, worktrees, mergedBranches, mergedRemoteBranches] = await Promise.all([
     getCurrentBranch(repoPath),
     getLocalBranches(repoPath),
     getRemoteBranches(repoPath),
     getWorktrees(repoPath),
     getMergedBranches(repoPath, base),
+    getMergedRemoteBranches(repoPath, base),
   ]);
   const checkedOutBranches = new Set(worktrees.map((worktree) => worktree.branch).filter(Boolean));
   const remoteNames = new Set(remoteBranches.map((branch) => branch.name.replace(/^origin\//, "")));
@@ -129,6 +153,29 @@ export async function scanRepository(repoPath, {
     };
   });
 
+  const remoteCandidates = remoteBranches
+    .map((branch) => {
+      const [remote, ...nameParts] = branch.name.split("/");
+      const name = nameParts.join("/");
+      const inactiveDays = daysSince(branch.commitDate, now);
+      const protectedBranch = protectedBranches.includes(name);
+      const mergedIntoBase = mergedRemoteBranches.has(branch.name);
+      const eligibleForReview = remote === "origin" && Boolean(name) && mergedIntoBase && inactiveDays !== null && inactiveDays >= staleAfterDays && !protectedBranch;
+      return {
+        ...branch,
+        inactiveDays,
+        mergedIntoBase,
+        name,
+        protectedBranch,
+        remote,
+        remoteRef: branch.name,
+        eligibleForReview,
+        prVerification: eligibleForReview ? "required" : "not-applicable",
+      };
+    })
+    .filter((branch) => branch.eligibleForReview)
+    .sort((first, second) => second.inactiveDays - first.inactiveDays);
+
   return {
     repoPath,
     baseBranch: base,
@@ -136,12 +183,15 @@ export async function scanRepository(repoPath, {
     staleAfterDays,
     branches,
     remoteBranches,
+    remoteCandidates,
+    remoteSync,
     worktrees,
     summary: {
       localBranchCount: branches.length,
       remoteBranchCount: remoteBranches.length,
       worktreeCount: worktrees.length,
       localDeleteCandidates: branches.filter((branch) => branch.safeLocalDelete).length,
+      remoteDeleteCandidates: remoteCandidates.length,
     },
   };
 }

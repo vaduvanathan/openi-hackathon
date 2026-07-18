@@ -1,5 +1,4 @@
-const profiles = ["vaduvanathan", "nathan-build"];
-const state = { accountSources: [], accountStorage: null, branchRecoveries: [], codex: null, githubProfiles: [], repository: null, sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, githubConnections: [], githubProfiles: [], repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -131,16 +130,35 @@ function renderRepository() {
   $("#repo-title").textContent = result.repoPath.split(/[\\/]/).pop() || result.repoPath;
   $("#repo-status").textContent = "Scanned";
   $("#repo-status").className = "pill";
-  $("#repo-summary").innerHTML = `<span>Branches</span><strong>${result.summary.localBranchCount}</strong><span>Worktrees</span><strong>${result.summary.worktreeCount}</strong><span>Safe candidates</span><strong>${result.summary.localDeleteCandidates}</strong>`;
+  $("#repo-summary").innerHTML = `<span>Local</span><strong>${result.summary.localBranchCount}</strong><span>Remote</span><strong>${result.summary.remoteBranchCount}</strong><span>Cleanup review</span><strong>${result.summary.localDeleteCandidates + result.summary.remoteDeleteCandidates}</strong>`;
   $("#metric-candidates").textContent = String(result.summary.localDeleteCandidates);
   $("#branch-table").innerHTML = result.branches.map((branch) => {
     const stateClass = branch.safeLocalDelete ? "state-safe" : branch.checkedOutWorktree || branch.protectedBranch ? "state-blocked" : "state-active";
     const stateLabel = branch.safeLocalDelete ? "Review" : branch.checkedOutWorktree ? "In worktree" : branch.protectedBranch ? "Protected" : branch.mergedIntoBase ? "Recent merge" : "Active / unmerged";
     const action = branch.safeLocalDelete
-      ? `<button class="button button-danger table-action" data-delete-branch="${escapeHtml(branch.name)}">Delete local</button>`
+      ? `<label class="row-choice"><input type="checkbox" data-select-branch="${escapeHtml(branch.name)}" ${state.selectedBranches.has(branch.name) ? "checked" : ""} aria-label="Select ${escapeHtml(branch.name)}" /><span>Select</span></label>`
       : "Keep";
     return `<tr><td>${escapeHtml(branch.name)}</td><td>${branch.inactiveDays === null ? "--" : `${branch.inactiveDays}d`}</td><td><span class="branch-state ${stateClass}">${stateLabel}</span></td><td>${action}</td></tr>`;
   }).join("");
+  $("#branch-selection-count").textContent = `${state.selectedBranches.size} selected`;
+  $("#delete-selected-branches").disabled = state.selectedBranches.size === 0;
+  renderRemoteCandidates();
+}
+
+function renderRemoteCandidates() {
+  const container = $("#remote-candidate-list");
+  if (!container) return;
+  const candidates = state.repository?.remoteCandidates || [];
+  $("#remote-sync-status").textContent = state.repository?.remoteSync === "synced" ? "Origin synced" : "Origin not synced";
+  if (!candidates.length) {
+    container.innerHTML = `<div class="empty-state">No merged, stale origin branches need remote cleanup review.</div>`;
+    return;
+  }
+  container.innerHTML = candidates.map((branch) => `
+    <div class="remote-row">
+      <div><strong>${escapeHtml(branch.name)}</strong><span>Merged into ${escapeHtml(state.repository.baseBranch)} - ${branch.inactiveDays}d inactive - GitHub PR check required</span></div>
+      <button class="button button-danger table-action" data-delete-remote-branch="${escapeHtml(branch.name)}">Verify & delete</button>
+    </div>`).join("");
 }
 
 function renderAccountSources() {
@@ -194,12 +212,18 @@ function renderSessionCleanup() {
     candidateContainer.innerHTML = `<div class="empty-state">No local session files are available for quarantine.</div>`;
   } else {
     const visibleCandidates = state.sessionCandidates.slice(0, 12);
-    candidateContainer.innerHTML = visibleCandidates.map((candidate) => `
+    candidateContainer.innerHTML = visibleCandidates.map((candidate) => {
+      const key = `${candidate.category}:${candidate.relativePath}`;
+      return `
       <div class="session-row">
         <div><strong>${escapeHtml(candidate.relativePath)}</strong><span>${escapeHtml(candidate.category)} - ${candidate.ageDays}d old - ${formatBytes(candidate.size)}</span></div>
-        <button class="button button-quiet" data-quarantine-category="${escapeHtml(candidate.category)}" data-quarantine-path="${escapeHtml(candidate.relativePath)}">Quarantine</button>
-      </div>`).join("") + (state.sessionCandidates.length > visibleCandidates.length ? `<p class="list-note">Showing the 12 oldest of ${state.sessionCandidates.length} local session files.</p>` : "");
+        <label class="row-choice"><input type="checkbox" data-select-session-category="${escapeHtml(candidate.category)}" data-select-session-path="${escapeHtml(candidate.relativePath)}" ${state.selectedSessions.has(key) ? "checked" : ""} aria-label="Select ${escapeHtml(candidate.relativePath)}" /><span>Select</span></label>
+      </div>`;
+    }).join("") + (state.sessionCandidates.length > visibleCandidates.length ? `<p class="list-note">Showing the 12 oldest of ${state.sessionCandidates.length} local session files.</p>` : "");
   }
+
+  $("#session-selection-count").textContent = `${state.selectedSessions.size} selected`;
+  $("#quarantine-selected-sessions").disabled = state.selectedSessions.size === 0;
 
   const quarantines = state.sessionRecoveries.filter((manifest) => manifest.status === "quarantined");
   if (!quarantines.length) {
@@ -213,12 +237,44 @@ function renderSessionCleanup() {
     </div>`).join("");
 }
 
+function describeAuditEvent(event) {
+  const labels = {
+    "api-source-added": "API source connected",
+    "api-source-removed": "API source removed",
+    "audit-exported": "Audit export created",
+    "codex-session-quarantined": "Local session quarantined",
+    "codex-session-restored": "Local session restored",
+    "handoff-exported": "Handoff created",
+    "handoff-import-prepared": "Handoff prepared for ChatGPT",
+    "local-branch-deleted": "Local branch deleted",
+    "local-branch-restored": "Local branch restored",
+    "remote-branch-deleted": "Remote branch deleted",
+  };
+  return labels[event.type] || event.type || "Activity recorded";
+}
+
+function renderAuditEvents() {
+  const container = $("#audit-list");
+  if (!container) return;
+  if (!state.auditEvents.length) {
+    container.innerHTML = `<div class="empty-state">Actions such as cleanup, restore, source changes, and handoffs appear here.</div>`;
+    return;
+  }
+  container.innerHTML = state.auditEvents.slice(0, 10).map((event) => {
+    const detail = event.branch || event.relativePath || event.sourceLabel || event.reportName || "Local activity";
+    return `<div class="audit-row"><div><strong>${escapeHtml(describeAuditEvent(event))}</strong><span>${escapeHtml(detail)}</span></div><time>${escapeHtml(formatTimestamp(event.timestamp))}</time></div>`;
+  }).join("");
+}
+
 function renderGitHubProfiles() {
   const container = $("#github-profiles");
-  if (!state.githubProfiles.length) return;
+  if (!state.githubConnections.length) {
+    container.innerHTML = `<div class="empty-state">Add a GitHub username to track its public repository activity.</div>`;
+    return;
+  }
   container.innerHTML = state.githubProfiles.map((profile) => profile.status === "ok"
-    ? `<div class="profile-row"><div><strong>${escapeHtml(profile.login)}</strong><span>${escapeHtml(profile.name)} - ${profile.followers} followers</span></div><b class="profile-repos">${profile.publicRepos} repos</b></div>`
-    : `<div class="profile-row"><div><strong>${escapeHtml(profile.login)}</strong><span>Could not read public profile</span></div><b class="profile-repos">Error</b></div>`).join("");
+    ? `<div class="profile-row"><div><strong>${escapeHtml(profile.login)}</strong><span>${escapeHtml(profile.name)} - ${profile.followers} followers</span></div><div class="profile-actions"><b class="profile-repos">${profile.publicRepos} repos</b><button class="icon-button" data-remove-github-profile="${escapeHtml(profile.login)}" title="Remove profile">X</button></div></div>`
+    : `<div class="profile-row"><div><strong>${escapeHtml(profile.login)}</strong><span>Could not read public profile</span></div><div class="profile-actions"><b class="profile-repos">Error</b><button class="icon-button" data-remove-github-profile="${escapeHtml(profile.login)}" title="Remove profile">X</button></div></div>`).join("");
 }
 
 async function loadUsageStatus() {
@@ -320,8 +376,10 @@ async function scanRepository() {
   const repositoryPath = await window.codexGuard.chooseRepository();
   if (!repositoryPath) return;
   state.repository = await window.codexGuard.scanRepository(repositoryPath);
+  state.selectedBranches.clear();
   renderRepository();
   await loadBranchRecoveries();
+  await loadAuditEvents();
   showToast(`Scanned ${state.repository.summary.localBranchCount} local branches.`);
 }
 
@@ -356,8 +414,10 @@ async function loadSessionRecoveries() {
 
 async function refreshCodexAfterSessionChange() {
   state.codex = await window.codexGuard.scanCodexState();
+  state.selectedSessions.clear();
   renderCodexState();
   await refreshSessionCleanup();
+  await loadAuditEvents();
 }
 
 async function quarantineCodexSession(category, relativePath) {
@@ -395,9 +455,47 @@ async function deleteLocalBranch(branchName) {
     state.repository = result.scan;
     renderRepository();
     await loadBranchRecoveries();
+    await loadAuditEvents();
     showToast(`Deleted local branch ${result.branch}.`);
   } catch {
     showToast("The branch is no longer safe to delete. Scan again and review it.");
+  }
+}
+
+async function deleteSelectedLocalBranches() {
+  if (!state.repository || !state.selectedBranches.size || !window.codexGuard?.deleteLocalBranches) return showToast("Select local cleanup candidates first.");
+  try {
+    const result = await window.codexGuard.deleteLocalBranches(state.repository.repoPath, [...state.selectedBranches], {
+      baseBranch: state.repository.baseBranch,
+      staleAfterDays: state.repository.staleAfterDays,
+    });
+    if (result.cancelled) return showToast("Local branch cleanup cancelled.");
+    state.repository = result.scan;
+    state.selectedBranches.clear();
+    renderRepository();
+    await Promise.all([loadBranchRecoveries(), loadAuditEvents()]);
+    const removed = result.results.filter((item) => item.deleted).length;
+    const skipped = result.results.length - removed;
+    showToast(`Deleted ${removed} local branch${removed === 1 ? "" : "es"}${skipped ? `; ${skipped} skipped` : ""}.`);
+  } catch {
+    showToast("Selected local branches could not be cleaned up safely.");
+  }
+}
+
+async function deleteRemoteBranch(branchName) {
+  if (!state.repository || !window.codexGuard?.deleteRemoteBranch) return showToast("Scan a repository before remote cleanup.");
+  try {
+    const result = await window.codexGuard.deleteRemoteBranch(state.repository.repoPath, branchName, {
+      baseBranch: state.repository.baseBranch,
+      staleAfterDays: state.repository.staleAfterDays,
+    });
+    if (result.cancelled) return showToast("Remote branch cleanup cancelled.");
+    state.repository = result.scan;
+    renderRepository();
+    await loadAuditEvents();
+    showToast(`Deleted remote branch ${result.branch}.`);
+  } catch (error) {
+    showToast(error?.message || "Remote cleanup was blocked.");
   }
 }
 
@@ -421,6 +519,7 @@ async function restoreLocalBranch(manifestId) {
       renderRepository();
     }
     showToast(`Restored local branch ${result.branch}.`);
+    await loadAuditEvents();
   } catch {
     showToast("The local branch could not be restored safely.");
   }
@@ -451,11 +550,78 @@ async function importHandoff() {
   }
 }
 
+async function quarantineSelectedSessions() {
+  if (!state.selectedSessions.size || !window.codexGuard?.quarantineCodexSessions) return showToast("Select local session files first.");
+  try {
+    const result = await window.codexGuard.quarantineCodexSessions([...state.selectedSessions.values()]);
+    if (result.cancelled) return showToast("Session cleanup cancelled.");
+    const moved = result.results.filter((item) => item.quarantined).length;
+    await refreshCodexAfterSessionChange();
+    showToast(`Quarantined ${moved} local session file${moved === 1 ? "" : "s"}.`);
+  } catch {
+    showToast("Selected local sessions could not be quarantined safely.");
+  }
+}
+
+async function loadAuditEvents() {
+  if (!window.codexGuard?.listAuditEvents) return;
+  state.auditEvents = await window.codexGuard.listAuditEvents();
+  renderAuditEvents();
+}
+
+async function exportAudit() {
+  if (!window.codexGuard?.exportAudit) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.exportAudit();
+    await loadAuditEvents();
+    showToast(`Created ${result.fileName}.`);
+  } catch {
+    showToast("Could not export the activity log.");
+  }
+}
+
 async function loadGitHubProfiles() {
-  if (!window.codexGuard?.scanGitHubProfiles) return showToast("Electron bridge is not available.");
-  state.githubProfiles = await window.codexGuard.scanGitHubProfiles(profiles);
+  if (!window.codexGuard?.scanGitHubProfiles || !window.codexGuard?.getGitHubConnections) return showToast("Electron bridge is not available.");
+  state.githubConnections = await window.codexGuard.getGitHubConnections();
+  state.githubProfiles = state.githubConnections.length ? await window.codexGuard.scanGitHubProfiles(state.githubConnections.map((profile) => profile.login)) : [];
   renderGitHubProfiles();
-  showToast("GitHub profile access checked.");
+  if (state.githubConnections.length) showToast("GitHub public profiles refreshed.");
+}
+
+function openGitHubProfileDialog() {
+  const dialog = $("#github-profile-dialog");
+  if (!dialog.open) dialog.showModal();
+  $("#github-profile-login").focus();
+}
+
+function closeGitHubProfileDialog() {
+  $("#github-profile-form").reset();
+  $("#github-profile-dialog").close();
+}
+
+async function addGitHubProfile(event) {
+  event.preventDefault();
+  if (!window.codexGuard?.addGitHubConnection) return showToast("Electron bridge is not available.");
+  try {
+    await window.codexGuard.addGitHubConnection($("#github-profile-login").value);
+    closeGitHubProfileDialog();
+    await Promise.all([loadGitHubProfiles(), loadAuditEvents()]);
+    showToast("GitHub profile added.");
+  } catch {
+    showToast("Enter a valid GitHub username.");
+  }
+}
+
+async function removeGitHubProfile(login) {
+  if (!window.codexGuard?.removeGitHubConnection) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.removeGitHubConnection(login);
+    if (result.cancelled) return showToast("GitHub profile removal cancelled.");
+    await Promise.all([loadGitHubProfiles(), loadAuditEvents()]);
+    showToast(`Removed ${login}.`);
+  } catch {
+    showToast("Could not remove that GitHub profile.");
+  }
 }
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
@@ -484,15 +650,35 @@ $("#cancel-api-source").addEventListener("click", closeApiSourceDialog);
 $("#cancel-api-source-bottom").addEventListener("click", closeApiSourceDialog);
 $("#api-source-dialog").addEventListener("close", () => $("#api-source-form").reset());
 $("#scan-repository").addEventListener("click", scanRepository);
+$("#delete-selected-branches").addEventListener("click", deleteSelectedLocalBranches);
 $("#scan-codex").addEventListener("click", scanCodex);
 $("#refresh-sessions").addEventListener("click", () => refreshSessionCleanup().catch(() => showToast("Could not refresh local session cleanup.")));
+$("#quarantine-selected-sessions").addEventListener("click", quarantineSelectedSessions);
 $("#refresh-profiles").addEventListener("click", loadGitHubProfiles);
+$("#add-github-profile").addEventListener("click", openGitHubProfileDialog);
+$("#github-profile-form").addEventListener("submit", addGitHubProfile);
+$("#cancel-github-profile").addEventListener("click", closeGitHubProfileDialog);
+$("#cancel-github-profile-bottom").addEventListener("click", closeGitHubProfileDialog);
+$("#github-profile-dialog").addEventListener("close", () => $("#github-profile-form").reset());
 $("#export-handoff").addEventListener("click", exportHandoff);
 $("#import-handoff").addEventListener("click", importHandoff);
 $("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
+$("#refresh-audit").addEventListener("click", loadAuditEvents);
+$("#export-audit").addEventListener("click", exportAudit);
 $("#branch-table").addEventListener("click", (event) => {
   const button = event.target.closest("[data-delete-branch]");
   if (button) deleteLocalBranch(button.dataset.deleteBranch);
+});
+$("#branch-table").addEventListener("change", (event) => {
+  const input = event.target.closest("[data-select-branch]");
+  if (!input) return;
+  if (input.checked) state.selectedBranches.add(input.dataset.selectBranch);
+  else state.selectedBranches.delete(input.dataset.selectBranch);
+  renderRepository();
+});
+$("#remote-candidate-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-remote-branch]");
+  if (button) deleteRemoteBranch(button.dataset.deleteRemoteBranch);
 });
 $("#recovery-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-restore-branch]");
@@ -502,9 +688,22 @@ $("#session-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-quarantine-category]");
   if (button) quarantineCodexSession(button.dataset.quarantineCategory, button.dataset.quarantinePath);
 });
+$("#session-list").addEventListener("change", (event) => {
+  const input = event.target.closest("[data-select-session-category]");
+  if (!input) return;
+  const candidate = { category: input.dataset.selectSessionCategory, relativePath: input.dataset.selectSessionPath };
+  const key = `${candidate.category}:${candidate.relativePath}`;
+  if (input.checked) state.selectedSessions.set(key, candidate);
+  else state.selectedSessions.delete(key);
+  renderSessionCleanup();
+});
 $("#session-recovery-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-restore-session]");
   if (button) restoreQuarantinedSession(button.dataset.restoreSession);
+});
+$("#github-profiles").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-github-profile]");
+  if (button) removeGitHubProfile(button.dataset.removeGithubProfile);
 });
 
 renderUsage();
@@ -513,3 +712,4 @@ await loadAccountSources();
 await loadGitHubProfiles();
 await loadBranchRecoveries();
 await loadSessionRecoveries();
+await loadAuditEvents();

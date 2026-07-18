@@ -131,6 +131,20 @@ export async function quarantineCodexSession(codexHome, candidate, {
   return { manifest: updatedManifest, quarantined: true };
 }
 
+export async function quarantineCodexSessions(codexHome, candidates, options = {}) {
+  const uniqueCandidates = [...new Map((candidates || []).map((candidate) => [`${candidate?.category}:${candidate?.relativePath}`, candidate])).values()];
+  if (!uniqueCandidates.length) throw new Error("Select at least one local session file to quarantine.");
+  const results = [];
+  for (const candidate of uniqueCandidates) {
+    try {
+      results.push({ candidate, ...(await quarantineCodexSession(codexHome, candidate, options)) });
+    } catch (error) {
+      results.push({ candidate, quarantined: false, error: error.message });
+    }
+  }
+  return results;
+}
+
 export async function listQuarantinedCodexSessions(manifestDirectory) {
   return listRecoveryManifests(manifestDirectory, { type: "codex-session-quarantine" });
 }

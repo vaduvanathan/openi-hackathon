@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } fr
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { addApiSource, appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, listApiSources, listCodexSessionCandidates, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, removeApiSource, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
+import { addApiSource, addGitHubProfileConnection, appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -21,6 +21,14 @@ function apiSourceStorePath() {
 
 function handoffDirectory() {
   return path.join(app.getPath("userData"), "handoffs");
+}
+
+function githubProfileStorePath() {
+  return path.join(app.getPath("userData"), "github", "profiles.json");
+}
+
+function auditPath() {
+  return path.join(app.getPath("userData"), "audit", "events.jsonl");
 }
 
 function handoffFileName() {
@@ -84,7 +92,7 @@ function createWindow() {
   window.loadFile(path.join(currentDirectory, "../renderer/index.html"));
 }
 
-ipcMain.handle("repository:scan", (_event, repoPath, options) => scanRepository(repoPath, options));
+ipcMain.handle("repository:scan", (_event, repoPath, options) => scanRepository(repoPath, { ...options, refreshRemote: true }));
 ipcMain.handle("repository:choose", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
   return result.canceled ? null : result.filePaths[0];
@@ -106,8 +114,45 @@ ipcMain.handle("repository:delete-local-branch", async (event, repoPath, branchN
   if (confirmation.response !== 1) return { cancelled: true, deleted: false };
   return deleteSafeLocalBranch(repoPath, branchName, {
     ...options,
-    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+    auditPath: auditPath(),
     manifestDirectory: recoveryManifestDirectory(),
+  });
+});
+ipcMain.handle("repository:delete-local-branches", async (event, repoPath, branchNames, options) => {
+  const names = [...new Set((branchNames || []).filter((name) => typeof name === "string" && name.trim()))];
+  if (!names.length) throw new Error("Select at least one local branch.");
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", `Delete ${names.length} local branch${names.length === 1 ? "" : "es"}`],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "Each branch is rescanned before deletion, removed only with git branch -d, and recorded for local restore. Remote branches will not change.",
+    message: `Delete ${names.length} selected local cleanup candidate${names.length === 1 ? "" : "s"}?`,
+    type: "warning",
+  });
+  if (confirmation.response !== 1) return { cancelled: true, results: [] };
+  const results = await deleteSafeLocalBranches(repoPath, names, {
+    ...options,
+    auditPath: auditPath(),
+    manifestDirectory: recoveryManifestDirectory(),
+  });
+  const scan = await scanRepository(repoPath, { ...options, refreshRemote: true });
+  return { cancelled: false, results, scan };
+});
+ipcMain.handle("repository:delete-remote-branch", async (event, repoPath, branchName, options) => {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Verify and delete remote branch"],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "The app fetches origin, verifies the branch is merged and stale, requires GitHub CLI open-PR verification, then runs git push origin --delete. Remote deletion cannot be restored automatically.",
+    message: `Verify and delete remote branch ${branchName}?`,
+    type: "warning",
+  });
+  if (confirmation.response !== 1) return { cancelled: true, deleted: false };
+  return deleteVerifiedRemoteBranch(repoPath, branchName, {
+    ...options,
+    auditPath: auditPath(),
   });
 });
 ipcMain.handle("repository:recovery-manifests", () => listLocalBranchRecoveryManifests(recoveryManifestDirectory()));
@@ -126,7 +171,7 @@ ipcMain.handle("repository:restore-local-branch", async (event, manifestId) => {
   });
   if (confirmation.response !== 1) return { cancelled: true, restored: false };
   return restoreSafeLocalBranch(recoveryManifestDirectory(), manifestId, {
-    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+    auditPath: auditPath(),
   });
 });
 ipcMain.handle("codex:scan", () => scanCodexState());
@@ -146,10 +191,33 @@ ipcMain.handle("codex:quarantine-session", async (event, candidate) => {
   });
   if (confirmation.response !== 1) return { cancelled: true, quarantined: false };
   return quarantineCodexSession(undefined, freshCandidate, {
-    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+    auditPath: auditPath(),
     manifestDirectory: recoveryManifestDirectory(),
     quarantineDirectory: quarantineDirectory(),
   });
+});
+ipcMain.handle("codex:quarantine-sessions", async (event, selectedCandidates) => {
+  const candidates = await listCodexSessionCandidates();
+  const requested = (selectedCandidates || [])
+    .map((candidate) => candidates.find((item) => item.category === candidate?.category && item.relativePath === candidate?.relativePath))
+    .filter(Boolean);
+  if (!requested.length) throw new Error("Select local session files that are still available for quarantine.");
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", `Quarantine ${requested.length} session file${requested.length === 1 ? "" : "s"}`],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "Selected files move to the private app quarantine folder and remain restorable. This does not delete ChatGPT/Codex server history or credentials.",
+    message: `Quarantine ${requested.length} local session file${requested.length === 1 ? "" : "s"}?`,
+    type: "warning",
+  });
+  if (confirmation.response !== 1) return { cancelled: true, results: [] };
+  const results = await quarantineCodexSessions(undefined, requested, {
+    auditPath: auditPath(),
+    manifestDirectory: recoveryManifestDirectory(),
+    quarantineDirectory: quarantineDirectory(),
+  });
+  return { cancelled: false, results };
 });
 ipcMain.handle("codex:quarantine-manifests", () => listQuarantinedCodexSessions(recoveryManifestDirectory()));
 ipcMain.handle("codex:restore-session", async (event, manifestId) => {
@@ -167,7 +235,7 @@ ipcMain.handle("codex:restore-session", async (event, manifestId) => {
   });
   if (confirmation.response !== 1) return { cancelled: true, restored: false };
   return restoreQuarantinedCodexSession(recoveryManifestDirectory(), quarantineDirectory(), manifestId, {
-    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+    auditPath: auditPath(),
   });
 });
 ipcMain.handle("usage:demo", () => getDemoUsage());
@@ -182,7 +250,7 @@ ipcMain.handle("account:add-api-source", async (_event, source) => {
     encryptedKey: safeStorage.encryptString(source.apiKey.trim()).toString("base64"),
     label: source.label,
   });
-  await appendAuditEvent(path.join(app.getPath("userData"), "audit", "events.jsonl"), {
+  await appendAuditEvent(auditPath(), {
     sourceId: saved.id,
     sourceLabel: saved.label,
     type: "api-source-added",
@@ -203,7 +271,7 @@ ipcMain.handle("account:remove-api-source", async (event, sourceId) => {
   });
   if (confirmation.response !== 1) return { cancelled: true };
   const removed = await removeApiSource(apiSourceStorePath(), sourceId);
-  await appendAuditEvent(path.join(app.getPath("userData"), "audit", "events.jsonl"), {
+  await appendAuditEvent(auditPath(), {
     sourceId: removed.id,
     sourceLabel: removed.label,
     type: "api-source-removed",
@@ -212,13 +280,44 @@ ipcMain.handle("account:remove-api-source", async (event, sourceId) => {
 });
 ipcMain.handle("account:open-chatgpt", () => shell.openExternal("https://chatgpt.com/"));
 ipcMain.handle("github:profiles", (_event, logins) => scanGitHubProfiles(logins));
+ipcMain.handle("github:connections", () => listGitHubProfileConnections(githubProfileStorePath()));
+ipcMain.handle("github:add-connection", async (_event, login) => {
+  const profile = await addGitHubProfileConnection(githubProfileStorePath(), login);
+  await appendAuditEvent(auditPath(), { login: profile.login, type: "github-profile-added" });
+  return profile;
+});
+ipcMain.handle("github:remove-connection", async (event, login) => {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Remove profile"],
+    cancelId: 0,
+    defaultId: 0,
+    message: `Remove public GitHub profile ${login}?`,
+    type: "warning",
+  });
+  if (confirmation.response !== 1) return { cancelled: true };
+  const profile = await removeGitHubProfileConnection(githubProfileStorePath(), login);
+  await appendAuditEvent(auditPath(), { login: profile.login, type: "github-profile-removed" });
+  return { cancelled: false, profile };
+});
+ipcMain.handle("audit:list", () => listAuditEvents(auditPath()));
+ipcMain.handle("audit:export", async () => {
+  const events = await listAuditEvents(auditPath(), { limit: 200 });
+  const directory = handoffDirectory();
+  const fileName = `codex-guard-audit-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  const filePath = path.join(directory, fileName);
+  await mkdir(directory, { recursive: true });
+  await writeFile(filePath, `${JSON.stringify({ exportedAt: new Date().toISOString(), events }, null, 2)}\n`, "utf8");
+  await appendAuditEvent(auditPath(), { reportName: fileName, type: "audit-exported" });
+  return { fileName, filePath };
+});
 ipcMain.handle("handoff:export", async (_event, reportData) => {
   const report = createHandoffReport(reportData);
   const directory = handoffDirectory();
   const filePath = path.join(directory, handoffFileName());
   await mkdir(directory, { recursive: true });
   await writeFile(filePath, report, "utf8");
-  await appendAuditEvent(path.join(app.getPath("userData"), "audit", "events.jsonl"), {
+  await appendAuditEvent(auditPath(), {
     reportName: path.basename(filePath),
     type: "handoff-exported",
   });
@@ -239,7 +338,7 @@ ipcMain.handle("handoff:import", async (event) => {
   const handoff = await readFile(filePath, "utf8");
   clipboard.writeText(handoff);
   await shell.openExternal("https://chatgpt.com/");
-  await appendAuditEvent(path.join(app.getPath("userData"), "audit", "events.jsonl"), {
+  await appendAuditEvent(auditPath(), {
     reportName: path.basename(filePath),
     size: fileInfo.size,
     type: "handoff-import-prepared",

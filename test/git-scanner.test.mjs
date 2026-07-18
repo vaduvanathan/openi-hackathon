@@ -19,4 +19,7 @@ test("classifies merged, stale, active, protected, and worktree branches", async
   assert.equal(branches.get("staging").protectedBranch, true);
   assert.equal(branches.get("codex/stale-experiment").checkedOutWorktree, true);
   assert.equal(result.summary.worktreeCount, 2);
+  assert.equal(result.summary.remoteDeleteCandidates, 1);
+  assert.equal(result.remoteCandidates[0].name, "codex/merged-old");
+  assert.equal(result.remoteCandidates[0].prVerification, "required");
 });
