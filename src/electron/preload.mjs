@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("codexGuard", {
   chooseRepository: () => ipcRenderer.invoke("repository:choose"),
   createCleanupPlan: (repoPath, options) => ipcRenderer.invoke("repository:cleanup-plan", repoPath, options),
   deleteLocalBranch: (repoPath, branchName, options) => ipcRenderer.invoke("repository:delete-local-branch", repoPath, branchName, options),
+  listBranchRecoveryManifests: () => ipcRenderer.invoke("repository:recovery-manifests"),
+  restoreLocalBranch: (manifestId) => ipcRenderer.invoke("repository:restore-local-branch", manifestId),
   scanCodexState: (codexHome) => ipcRenderer.invoke("codex:scan", codexHome),
   getDemoUsage: () => ipcRenderer.invoke("usage:demo"),
   getOpenAIUsageStatus: () => ipcRenderer.invoke("openai:usage-status"),

@@ -2,10 +2,14 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
+import { appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, listLocalBranchRecoveryManifests, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
+
+function recoveryManifestDirectory() {
+  return path.join(app.getPath("userData"), "recovery-manifests");
+}
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -42,6 +46,26 @@ ipcMain.handle("repository:delete-local-branch", async (event, repoPath, branchN
   if (confirmation.response !== 1) return { cancelled: true, deleted: false };
   return deleteSafeLocalBranch(repoPath, branchName, {
     ...options,
+    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+    manifestDirectory: recoveryManifestDirectory(),
+  });
+});
+ipcMain.handle("repository:recovery-manifests", () => listLocalBranchRecoveryManifests(recoveryManifestDirectory()));
+ipcMain.handle("repository:restore-local-branch", async (event, manifestId) => {
+  const manifests = await listLocalBranchRecoveryManifests(recoveryManifestDirectory());
+  const manifest = manifests.find((item) => item.id === manifestId);
+  if (!manifest || manifest.status !== "deleted") throw new Error("Recovery manifest is not available for restore.");
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Restore local branch"],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "The app will recreate the branch at its recorded local commit. It will not overwrite an existing branch or change any remote branch.",
+    message: `Restore the local branch ${manifest.branch}?`,
+    type: "question",
+  });
+  if (confirmation.response !== 1) return { cancelled: true, restored: false };
+  return restoreSafeLocalBranch(recoveryManifestDirectory(), manifestId, {
     auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
   });
 });

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { deleteSafeLocalBranch } from "../src/core/index.mjs";
+import { deleteSafeLocalBranch, listLocalBranchRecoveryManifests, restoreSafeLocalBranch } from "../src/core/index.mjs";
 import { runCommand } from "../src/core/command.mjs";
 
 async function git(repoPath, args) {
@@ -13,6 +13,7 @@ async function git(repoPath, args) {
 test("deletes only a freshly rescanned safe local branch and audits the action", async () => {
   const repository = await mkdtemp(path.join(os.tmpdir(), "codex-session-guard-cleanup-"));
   const auditPath = path.join(repository, "audit", "events.jsonl");
+  const manifestDirectory = path.join(repository, "recovery-manifests");
   const now = Date.parse("2026-07-18T12:00:00Z");
   await git(repository, ["init", "-b", "main"]);
   await git(repository, ["config", "user.email", "test@example.com"]);
@@ -25,6 +26,7 @@ test("deletes only a freshly rescanned safe local branch and audits the action",
   const result = await deleteSafeLocalBranch(repository, "codex/merged-old", {
     auditPath,
     baseBranch: "main",
+    manifestDirectory,
     now: now + 31 * 86_400_000,
     staleAfterDays: 30,
   });
@@ -34,4 +36,11 @@ test("deletes only a freshly rescanned safe local branch and audits the action",
   assert.equal(result.scan.branches.some((branch) => branch.name === "codex/merged-old"), false);
   assert.equal(auditRecord.type, "local-branch-deleted");
   assert.equal(auditRecord.branch, "codex/merged-old");
+  const [manifest] = await listLocalBranchRecoveryManifests(manifestDirectory);
+  assert.equal(manifest.status, "deleted");
+
+  const restored = await restoreSafeLocalBranch(manifestDirectory, manifest.id, { auditPath });
+  assert.equal(restored.restored, true);
+  assert.equal(restored.branch, "codex/merged-old");
+  assert.equal((await git(repository, ["show-ref", "--verify", "--quiet", "refs/heads/codex/merged-old"])), undefined);
 });

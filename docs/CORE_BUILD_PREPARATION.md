@@ -12,7 +12,7 @@ The first batch does not include password storage, Bun or Node environment readi
 - Git CLI for branch, merge, worktree, commit, and repository status information.
 - Electron main-process IPC for safe renderer access.
 - A local audit log for scans and approved actions.
-- A recovery manifest before any future branch or file deletion.
+- A recovery manifest for every approved local branch deletion, with a no-overwrite restore path.
 - A sanitized, user-selected Markdown handoff export with no transcript or credential content.
 
 ## External APIs

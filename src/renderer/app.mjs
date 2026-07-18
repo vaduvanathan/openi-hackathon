@@ -1,5 +1,5 @@
 const profiles = ["vaduvanathan", "nathan-build"];
-const state = { codex: null, githubProfiles: [], repository: null, usage: null, usageStatus: null };
+const state = { branchRecoveries: [], codex: null, githubProfiles: [], repository: null, usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -11,6 +11,11 @@ function formatTokens(value) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
   return String(value);
+}
+
+function formatTimestamp(value) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : "Unknown time";
 }
 
 function showToast(message) {
@@ -132,6 +137,20 @@ function renderRepository() {
   }).join("");
 }
 
+function renderBranchRecoveries() {
+  const container = $("#recovery-list");
+  const recoveries = state.branchRecoveries.filter((manifest) => manifest.status === "deleted");
+  if (!recoveries.length) {
+    container.innerHTML = `<div class="empty-state">No deleted local branches are available to restore.</div>`;
+    return;
+  }
+  container.innerHTML = recoveries.map((manifest) => `
+    <div class="recovery-row">
+      <div><strong>${escapeHtml(manifest.branch)}</strong><span>Deleted ${escapeHtml(formatTimestamp(manifest.deletedAt || manifest.createdAt))}</span></div>
+      <button class="button button-quiet" data-restore-branch="${escapeHtml(manifest.id)}">Restore</button>
+    </div>`).join("");
+}
+
 function renderCodexState() {
   if (!state.codex) return;
   const categories = Object.values(state.codex.categories).filter((category) => category.exists);
@@ -182,8 +201,9 @@ async function scanRepository() {
   if (!window.codexGuard?.chooseRepository) return showToast("Electron bridge is not available.");
   const repositoryPath = await window.codexGuard.chooseRepository();
   if (!repositoryPath) return;
-  state.repository = await window.codexGuard.scanRepository(repositoryPath, { baseBranch: "staging" });
+  state.repository = await window.codexGuard.scanRepository(repositoryPath);
   renderRepository();
+  await loadBranchRecoveries();
   showToast(`Scanned ${state.repository.summary.localBranchCount} local branches.`);
 }
 
@@ -204,9 +224,35 @@ async function deleteLocalBranch(branchName) {
     if (result.cancelled) return showToast("Local branch deletion cancelled.");
     state.repository = result.scan;
     renderRepository();
+    await loadBranchRecoveries();
     showToast(`Deleted local branch ${result.branch}.`);
   } catch {
     showToast("The branch is no longer safe to delete. Scan again and review it.");
+  }
+}
+
+async function loadBranchRecoveries() {
+  if (!window.codexGuard?.listBranchRecoveryManifests) return;
+  state.branchRecoveries = await window.codexGuard.listBranchRecoveryManifests();
+  renderBranchRecoveries();
+}
+
+async function restoreLocalBranch(manifestId) {
+  if (!window.codexGuard?.restoreLocalBranch) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.restoreLocalBranch(manifestId);
+    if (result.cancelled) return showToast("Local branch restore cancelled.");
+    await loadBranchRecoveries();
+    if (state.repository?.repoPath === result.repository) {
+      state.repository = await window.codexGuard.scanRepository(result.repository, {
+        baseBranch: state.repository.baseBranch,
+        staleAfterDays: state.repository.staleAfterDays,
+      });
+      renderRepository();
+    }
+    showToast(`Restored local branch ${result.branch}.`);
+  } catch {
+    showToast("The local branch could not be restored safely.");
   }
 }
 
@@ -249,11 +295,17 @@ $("#scan-repository").addEventListener("click", scanRepository);
 $("#scan-codex").addEventListener("click", scanCodex);
 $("#refresh-profiles").addEventListener("click", loadGitHubProfiles);
 $("#export-handoff").addEventListener("click", exportHandoff);
+$("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
 $("#branch-table").addEventListener("click", (event) => {
   const button = event.target.closest("[data-delete-branch]");
   if (button) deleteLocalBranch(button.dataset.deleteBranch);
+});
+$("#recovery-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-restore-branch]");
+  if (button) restoreLocalBranch(button.dataset.restoreBranch);
 });
 
 renderUsage();
 await loadUsageStatus();
 await loadGitHubProfiles();
+await loadBranchRecoveries();
