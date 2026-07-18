@@ -1,8 +1,8 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } from "electron";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { addApiSource, addGitHubProfileConnection, appendAuditEvent, checkoutGitHubCliRepository, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, discoverLocalAgentWorktrees, discoverOpenAIDesktopClients, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, getPresentationGitHubWorkspace, getPresentationRepositoryScan, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubCliAccounts, listGitHubCliRepositories, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository, switchGitHubCliAccount } from "../core/index.mjs";
+import { addApiSource, addGitHubProfileConnection, appendAuditEvent, checkoutGitHubCliRepository, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, discoverLocalAgentWorktrees, discoverOpenAIDesktopClients, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, getPresentationGitHubWorkspace, getPresentationRepositoryScan, inspectCodexSession, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubCliAccounts, listGitHubCliRepositories, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository, switchGitHubCliAccount } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -180,6 +180,12 @@ ipcMain.handle("repository:restore-local-branch", async (event, manifestId) => {
 });
 ipcMain.handle("codex:scan", () => scanCodexState());
 ipcMain.handle("codex:session-candidates", () => listCodexSessionCandidates());
+ipcMain.handle("codex:inspect-session", async (_event, candidate) => {
+  const candidates = await listCodexSessionCandidates();
+  const freshCandidate = candidates.find((item) => item.category === candidate?.category && item.relativePath === candidate?.relativePath);
+  if (!freshCandidate) throw new Error("The selected session file is no longer available for inspection.");
+  return inspectCodexSession(freshCandidate);
+});
 ipcMain.handle("codex:quarantine-session", async (event, candidate) => {
   const candidates = await listCodexSessionCandidates();
   const freshCandidate = candidates.find((item) => item.category === candidate?.category && item.relativePath === candidate?.relativePath);
@@ -345,6 +351,30 @@ ipcMain.handle("handoff:export", async (_event, reportData) => {
     type: "handoff-exported",
   });
   return { fileName: path.basename(filePath), filePath };
+});
+ipcMain.handle("handoff:list", async () => {
+  const directory = handoffDirectory();
+  try {
+    const files = await readdir(directory, { withFileTypes: true });
+    const handoffs = await Promise.all(files
+      .filter((entry) => entry.isFile() && /\.(md|txt|json)$/i.test(entry.name))
+      .map(async (entry) => {
+        const filePath = path.join(directory, entry.name);
+        const info = await stat(filePath);
+        return { createdAt: info.birthtime.toISOString(), fileName: entry.name, size: info.size };
+      }));
+    return handoffs.sort((first, second) => second.createdAt.localeCompare(first.createdAt)).slice(0, 20);
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+});
+ipcMain.handle("handoff:open-directory", async () => {
+  const directory = handoffDirectory();
+  await mkdir(directory, { recursive: true });
+  const error = await shell.openPath(directory);
+  if (error) throw new Error(error);
+  return { directory };
 });
 ipcMain.handle("handoff:import", async (event) => {
   const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;

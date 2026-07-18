@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("codexGuard", {
   restoreLocalBranch: (manifestId) => ipcRenderer.invoke("repository:restore-local-branch", manifestId),
   scanCodexState: () => ipcRenderer.invoke("codex:scan"),
   listCodexSessionCandidates: () => ipcRenderer.invoke("codex:session-candidates"),
+  inspectCodexSession: (candidate) => ipcRenderer.invoke("codex:inspect-session", candidate),
   quarantineCodexSession: (candidate) => ipcRenderer.invoke("codex:quarantine-session", candidate),
   quarantineCodexSessions: (candidates) => ipcRenderer.invoke("codex:quarantine-sessions", candidates),
   listQuarantinedSessions: () => ipcRenderer.invoke("codex:quarantine-manifests"),
@@ -38,5 +39,7 @@ contextBridge.exposeInMainWorld("codexGuard", {
   scanLocalAgentWorktrees: () => ipcRenderer.invoke("local:agent-worktrees"),
   getDesktopClients: () => ipcRenderer.invoke("desktop:clients"),
   exportHandoff: (reportData) => ipcRenderer.invoke("handoff:export", reportData),
+  listHandoffs: () => ipcRenderer.invoke("handoff:list"),
+  openHandoffDirectory: () => ipcRenderer.invoke("handoff:open-directory"),
   importHandoff: () => ipcRenderer.invoke("handoff:import"),
 });

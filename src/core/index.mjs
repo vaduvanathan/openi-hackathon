@@ -3,6 +3,7 @@ export { scanCodexState } from "./codex-state.mjs";
 export { getAccountSources } from "./account-sources.mjs";
 export { addApiSource, getEncryptedApiSource, listApiSources, removeApiSource } from "./api-source-store.mjs";
 export { listCodexSessionCandidates, listQuarantinedCodexSessions, quarantineCodexSession, quarantineCodexSessions, restoreQuarantinedCodexSession } from "./codex-quarantine.mjs";
+export { inspectCodexSession } from "./codex-session-inspector.mjs";
 export { appendAuditEvent, listAuditEvents } from "./audit.mjs";
 export { createCleanupPlan } from "./cleanup-plan.mjs";
 export { getDemoUsage } from "./demo-usage.mjs";
