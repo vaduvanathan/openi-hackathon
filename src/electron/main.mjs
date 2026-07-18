@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createCleanupPlan, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
+import { appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -28,11 +29,43 @@ ipcMain.handle("repository:cleanup-plan", async (_event, repoPath, options) => {
   const scan = await scanRepository(repoPath, options);
   return createCleanupPlan(scan, options);
 });
+ipcMain.handle("repository:delete-local-branch", async (event, repoPath, branchName, options) => {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Delete local branch"],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "The app will rescan the repository first, use git branch -d, and will not delete any remote branch.",
+    message: `Delete the local branch ${branchName}?`,
+    type: "warning",
+  });
+  if (confirmation.response !== 1) return { cancelled: true, deleted: false };
+  return deleteSafeLocalBranch(repoPath, branchName, {
+    ...options,
+    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+  });
+});
 ipcMain.handle("codex:scan", (_event, codexHome) => scanCodexState(codexHome));
 ipcMain.handle("usage:demo", () => getDemoUsage());
 ipcMain.handle("openai:usage-status", () => getOpenAIUsageStatus());
 ipcMain.handle("openai:usage", (_event, options) => fetchOpenAIUsage(options));
 ipcMain.handle("github:profiles", (_event, logins) => scanGitHubProfiles(logins));
+ipcMain.handle("handoff:export", async (event, reportData) => {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const report = createHandoffReport(reportData);
+  const saveResult = await dialog.showSaveDialog(parentWindow, {
+    defaultPath: "codex-session-guard-handoff.md",
+    filters: [{ extensions: ["md"], name: "Markdown" }],
+    title: "Export sanitized handoff report",
+  });
+  if (saveResult.canceled || !saveResult.filePath) return { cancelled: true };
+  await writeFile(saveResult.filePath, report, "utf8");
+  await appendAuditEvent(path.join(app.getPath("userData"), "audit", "events.jsonl"), {
+    reportName: path.basename(saveResult.filePath),
+    type: "handoff-exported",
+  });
+  return { cancelled: false, filePath: saveResult.filePath };
+});
 
 app.whenReady().then(() => {
   createWindow();

@@ -125,7 +125,9 @@ function renderRepository() {
   $("#branch-table").innerHTML = result.branches.map((branch) => {
     const stateClass = branch.safeLocalDelete ? "state-safe" : branch.checkedOutWorktree || branch.protectedBranch ? "state-blocked" : "state-active";
     const stateLabel = branch.safeLocalDelete ? "Review" : branch.checkedOutWorktree ? "In worktree" : branch.protectedBranch ? "Protected" : branch.mergedIntoBase ? "Recent merge" : "Active / unmerged";
-    const action = branch.safeLocalDelete ? "Preview" : "Keep";
+    const action = branch.safeLocalDelete
+      ? `<button class="button button-danger table-action" data-delete-branch="${escapeHtml(branch.name)}">Delete local</button>`
+      : "Keep";
     return `<tr><td>${escapeHtml(branch.name)}</td><td>${branch.inactiveDays === null ? "--" : `${branch.inactiveDays}d`}</td><td><span class="branch-state ${stateClass}">${stateLabel}</span></td><td>${action}</td></tr>`;
   }).join("");
 }
@@ -192,6 +194,37 @@ async function scanCodex() {
   showToast("Local Codex state scanned.");
 }
 
+async function deleteLocalBranch(branchName) {
+  if (!state.repository || !window.codexGuard?.deleteLocalBranch) return showToast("Scan a repository before deleting a branch.");
+  try {
+    const result = await window.codexGuard.deleteLocalBranch(state.repository.repoPath, branchName, {
+      baseBranch: state.repository.baseBranch,
+      staleAfterDays: state.repository.staleAfterDays,
+    });
+    if (result.cancelled) return showToast("Local branch deletion cancelled.");
+    state.repository = result.scan;
+    renderRepository();
+    showToast(`Deleted local branch ${result.branch}.`);
+  } catch {
+    showToast("The branch is no longer safe to delete. Scan again and review it.");
+  }
+}
+
+async function exportHandoff() {
+  if (!window.codexGuard?.exportHandoff) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.exportHandoff({
+      codex: state.codex,
+      repository: state.repository,
+      usage: state.usage,
+    });
+    if (result.cancelled) return showToast("Handoff export cancelled.");
+    showToast("Sanitized handoff report exported.");
+  } catch {
+    showToast("Could not export the handoff report.");
+  }
+}
+
 async function loadGitHubProfiles() {
   if (!window.codexGuard?.scanGitHubProfiles) return showToast("Electron bridge is not available.");
   state.githubProfiles = await window.codexGuard.scanGitHubProfiles(profiles);
@@ -215,6 +248,11 @@ $("#refresh-usage").addEventListener("click", () => state.usage?.source === "dem
 $("#scan-repository").addEventListener("click", scanRepository);
 $("#scan-codex").addEventListener("click", scanCodex);
 $("#refresh-profiles").addEventListener("click", loadGitHubProfiles);
+$("#export-handoff").addEventListener("click", exportHandoff);
+$("#branch-table").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-branch]");
+  if (button) deleteLocalBranch(button.dataset.deleteBranch);
+});
 
 renderUsage();
 await loadUsageStatus();

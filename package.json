@@ -2,15 +2,46 @@
   "name": "codex-session-guard",
   "version": "0.1.0",
   "private": true,
+  "author": "Vaduvanathan P",
   "description": "Local observability and cleanup core for Codex coding workspaces.",
   "type": "module",
   "main": "src/electron/main.mjs",
   "scripts": {
     "test": "node --test",
     "scan:demo": "node scripts/scan-demo.mjs",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "dist:dir": "electron-builder --dir",
+    "dist:installer": "electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "latest"
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.vaduvanathan.codexsessionguard",
+    "productName": "Codex Session Guard",
+    "artifactName": "${productName}-${version}-setup.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!test/**/*",
+      "!docs/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "allowToChangeInstallationDirectory": true,
+      "oneClick": false
+    }
   }
 }

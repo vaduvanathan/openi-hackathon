@@ -4,6 +4,7 @@ out/
 reports/
 quarantine/
 data/
+release/
 *.log
 .env
 .env.*

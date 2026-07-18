@@ -50,6 +50,8 @@ h2 { font-size: 15px; margin-bottom: 0; letter-spacing: .01em; }
 .button-primary { border-color: var(--cyan); background: var(--cyan); color: #0b1a1d; font-weight: 700; }
 .button-primary:hover { background: #6ae3e6; border-color: #6ae3e6; }
 .button-quiet { padding: 7px 10px; background: transparent; }
+.button-danger { border-color: #7c4b4a; color: #f3aaa5; background: #2a1d1d; }
+.button-danger:hover { border-color: var(--red); background: #392322; }
 .alert-strip { display: flex; align-items: center; gap: 11px; border: 1px solid #51452d; background: #211e18; color: var(--amber); padding: 12px 14px; border-radius: 7px; margin-bottom: 20px; font-size: 12px; }
 .alert-strip strong { margin-right: 7px; color: #f2cc8e; }
 .alert-strip span { color: #b5a98d; }
@@ -82,6 +84,7 @@ select, .range-button, .icon-button { border: 1px solid var(--line); background:
 .progress { height: 6px; border-radius: 999px; background: #2b333c; overflow: hidden; margin-top: 10px; }.progress i { display: block; height: 100%; border-radius: inherit; }.bar-cyan { background: var(--cyan); }.bar-green { background: var(--green); }.bar-amber { background: var(--amber); }
 .repo-summary { display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr; gap: 9px; align-items: baseline; color: var(--muted); font-size: 11px; padding: 10px 0 15px; }.repo-summary strong { color: var(--text); font-size: 15px; }
 .table-wrap { overflow-x: auto; }.table-wrap table { width: 100%; border-collapse: collapse; font-size: 11px; }.table-wrap th { text-align: left; color: var(--dim); font-weight: 500; padding: 9px 8px; border-bottom: 1px solid var(--line); }.table-wrap td { padding: 11px 8px; border-bottom: 1px solid #252d36; color: var(--muted); }.table-wrap tr:last-child td { border-bottom: 0; }.table-wrap td:first-child { color: var(--text); font-family: "Cascadia Code", Consolas, monospace; font-size: 10px; }
+.table-action { padding: 5px 7px; font-size: 10px; }
 .branch-state { display: inline-flex; border-radius: 999px; padding: 4px 7px; font-size: 10px; border: 1px solid; }.state-safe { color: var(--green); border-color: #316d4f; background: #172a21; }.state-blocked { color: var(--amber); border-color: #705d32; background: #2a2418; }.state-active { color: var(--cyan); border-color: #2e6f72; background: #14282b; }
 .empty-state { color: var(--dim); padding: 20px 8px !important; text-align: center; }
 .state-list { display: grid; gap: 8px; margin-bottom: 22px; }.state-row { display: flex; justify-content: space-between; padding: 10px 11px; background: var(--panel-soft); border-radius: 5px; font-size: 11px; }.state-row span { color: var(--muted); }.state-row strong { color: var(--text); font-weight: 600; }

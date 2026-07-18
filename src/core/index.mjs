@@ -5,3 +5,5 @@ export { createCleanupPlan } from "./cleanup-plan.mjs";
 export { getDemoUsage } from "./demo-usage.mjs";
 export { scanGitHubProfiles } from "./github-profile.mjs";
 export { fetchOpenAIUsage, getOpenAIUsageStatus } from "./openai-usage.mjs";
+export { deleteSafeLocalBranch } from "./repository-cleanup.mjs";
+export { createHandoffReport } from "./handoff-report.mjs";

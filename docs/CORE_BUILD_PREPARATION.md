@@ -4,7 +4,7 @@
 
 The first version is a Windows-first Electron application with local logic in the main process. The renderer will remain a thin client until the scan results and safety rules are tested.
 
-The first batch does not include password storage, Bun or Node environment readiness, temporary secret injection, cloud ChatGPT history deletion, or automatic destructive cleanup.
+The first batch does not include password storage, Bun or Node environment readiness, temporary secret injection, or cloud ChatGPT history deletion. Local branch cleanup requires an explicit native confirmation and a fresh safety scan.
 
 ## Local Capabilities Needed
 
@@ -13,6 +13,7 @@ The first batch does not include password storage, Bun or Node environment readi
 - Electron main-process IPC for safe renderer access.
 - A local audit log for scans and approved actions.
 - A recovery manifest before any future branch or file deletion.
+- A sanitized, user-selected Markdown handoff export with no transcript or credential content.
 
 ## External APIs
 
