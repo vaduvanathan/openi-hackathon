@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("codexGuard", {
   scanRepository: (repoPath, options) => ipcRenderer.invoke("repository:scan", repoPath, options),

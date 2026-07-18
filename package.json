@@ -8,6 +8,7 @@
   "main": "src/electron/main.mjs",
   "scripts": {
     "test": "node --test",
+    "test:electron-bridge": "electron scripts/verify-preload-bridge.cjs",
     "scan:demo": "node scripts/scan-demo.mjs",
     "start": "electron .",
     "dist": "electron-builder --win portable",

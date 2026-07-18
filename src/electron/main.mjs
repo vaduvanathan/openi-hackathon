@@ -22,7 +22,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(currentDirectory, "preload.mjs"),
+      preload: path.join(currentDirectory, "preload.cjs"),
     },
   });
   window.loadFile(path.join(currentDirectory, "../renderer/index.html"));
