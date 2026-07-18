@@ -1,8 +1,14 @@
 import { getOpenAIUsageStatus } from "./openai-usage.mjs";
 
-export function getAccountSources(environment = process.env) {
+function apiSource({ detail, id, kind, label, removable = false, status, telemetry }) {
+  return { detail, id, kind, label, removable, status, telemetry };
+}
+
+export function getAccountSources(options = process.env) {
+  const environment = options.environment ?? options;
+  const storedSources = options.storedSources ?? [];
   const apiUsage = getOpenAIUsageStatus(environment);
-  return [
+  const sources = [
     {
       detail: "Personal plan, credits, and Codex quota remain in ChatGPT.",
       id: "chatgpt-codex",
@@ -11,13 +17,37 @@ export function getAccountSources(environment = process.env) {
       status: "Browser handoff",
       telemetry: "not-supported",
     },
-    {
-      detail: apiUsage.configured ? "Organization API usage and costs are available in this app." : "Set OPENAI_ADMIN_KEY before launch to load organization usage and costs.",
-      id: "openai-api-platform",
+  ];
+  if (apiUsage.configured) {
+    sources.push(apiSource({
+      detail: "Organization API usage and costs are available through OPENAI_ADMIN_KEY.",
+      id: "environment-admin-key",
+      kind: "Organization API",
+      label: "Environment API source",
+      status: "Ready",
+      telemetry: "available",
+    }));
+  }
+  for (const source of storedSources) {
+    sources.push(apiSource({
+      detail: "Organization API usage and costs are available through Windows-protected storage.",
+      id: source.id,
+      kind: "Organization API",
+      label: source.label,
+      removable: true,
+      status: "Ready",
+      telemetry: "available",
+    }));
+  }
+  if (sources.length === 1) {
+    sources.push(apiSource({
+      detail: "Add an OpenAI Admin key to load organization API usage and costs.",
+      id: "openai-api-setup",
       kind: "Organization API",
       label: "OpenAI API Platform",
-      status: apiUsage.configured ? "Ready" : "Admin key needed",
-      telemetry: apiUsage.configured ? "available" : "not-configured",
-    },
-  ];
+      status: "Setup required",
+      telemetry: "not-configured",
+    }));
+  }
+  return sources;
 }

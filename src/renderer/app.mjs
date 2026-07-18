@@ -1,5 +1,5 @@
 const profiles = ["vaduvanathan", "nathan-build"];
-const state = { accountSources: [], branchRecoveries: [], codex: null, githubProfiles: [], repository: null, sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], accountStorage: null, branchRecoveries: [], codex: null, githubProfiles: [], repository: null, sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -56,11 +56,11 @@ function renderUsageStatus() {
     return;
   }
   badge.textContent = configured ? "API source ready" : "No live source";
-  title.textContent = configured ? "An OpenAI Admin key is available to this app." : "No live OpenAI API source is connected.";
+  title.textContent = configured ? "Live organization API sources are ready." : "No live OpenAI API source is connected.";
   body.textContent = configured
-    ? "Load 14 days of organization API usage and cost data. Personal ChatGPT and Codex quota is not available through this connector."
-    : "Set OPENAI_ADMIN_KEY before launching the app to load organization API usage and costs. The app never shows or saves the key.";
-  loadButton.textContent = configured ? "Load API usage" : "API key needed";
+    ? `Load 14 days of usage across ${state.usageStatus.sourceCount || 1} saved organization source${state.usageStatus.sourceCount === 1 ? "" : "s"}.`
+    : "Connect an OpenAI API organization to load live usage and costs. Personal ChatGPT and Codex quota stays in ChatGPT.";
+  loadButton.textContent = configured ? "Load live usage" : "Connect data";
 }
 
 function renderAccounts() {
@@ -150,15 +150,15 @@ function renderAccountSources() {
     return;
   }
   container.innerHTML = state.accountSources.map((source) => {
-    const action = source.id === "chatgpt-codex"
-      ? `<button class="button button-quiet" data-open-chatgpt>Open ChatGPT</button>`
-      : source.telemetry === "available"
-        ? `<button class="button button-quiet" data-load-api-source>Load usage</button>`
-        : "";
+    const actions = [];
+    if (source.id === "chatgpt-codex") actions.push(`<button class="button button-quiet" data-open-chatgpt>Open ChatGPT</button>`);
+    if (source.telemetry === "available") actions.push(`<button class="button button-quiet" data-load-api-source>Load usage</button>`);
+    if (source.telemetry === "not-configured") actions.push(`<button class="button button-quiet" data-add-api-source>Add source</button>`);
+    if (source.removable) actions.push(`<button class="button button-danger table-action" data-remove-api-source="${escapeHtml(source.id)}">Remove</button>`);
     return `
       <div class="source-row">
         <div><strong>${escapeHtml(source.label)}</strong><span>${escapeHtml(source.kind)} - ${escapeHtml(source.detail)}</span></div>
-        <div class="source-action"><span class="pill">${escapeHtml(source.status)}</span>${action}</div>
+        <div class="source-action"><span class="pill">${escapeHtml(source.status)}</span>${actions.join("")}</div>
       </div>`;
   }).join("");
 }
@@ -228,9 +228,43 @@ async function loadUsageStatus() {
 }
 
 async function loadAccountSources() {
-  if (!window.codexGuard?.getAccountSources) return;
-  state.accountSources = await window.codexGuard.getAccountSources();
+  if (!window.codexGuard?.getAccountSources || !window.codexGuard?.getAccountStorageStatus) return;
+  const [sources, storage] = await Promise.all([
+    window.codexGuard.getAccountSources(),
+    window.codexGuard.getAccountStorageStatus(),
+  ]);
+  state.accountSources = sources;
+  state.accountStorage = storage;
   renderAccountSources();
+}
+
+function openApiSourceDialog() {
+  if (!state.accountStorage?.available) return showToast("Windows-protected storage is unavailable on this device.");
+  const dialog = $("#api-source-dialog");
+  if (!dialog.open) dialog.showModal();
+  $("#api-source-label").focus();
+}
+
+function closeApiSourceDialog() {
+  $("#api-source-form").reset();
+  $("#api-source-dialog").close();
+}
+
+async function addApiSource(event) {
+  event.preventDefault();
+  if (!window.codexGuard?.addApiSource) return showToast("Electron bridge is not available.");
+  const labelField = $("#api-source-label");
+  const keyField = $("#api-source-key");
+  const source = { apiKey: keyField.value, label: labelField.value };
+  keyField.value = "";
+  try {
+    await window.codexGuard.addApiSource(source);
+    closeApiSourceDialog();
+    await Promise.all([loadUsageStatus(), loadAccountSources()]);
+    await loadLiveUsage();
+  } catch {
+    showToast("Could not add that API source. Check the name and Admin key.");
+  }
 }
 
 async function openChatGpt() {
@@ -243,16 +277,30 @@ async function openChatGpt() {
   }
 }
 
+async function removeApiSource(sourceId) {
+  if (!window.codexGuard?.removeApiSource) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.removeApiSource(sourceId);
+    if (result.cancelled) return showToast("API source removal cancelled.");
+    state.usage = null;
+    await Promise.all([loadUsageStatus(), loadAccountSources()]);
+    renderUsage();
+    showToast(`Removed ${result.source.label}.`);
+  } catch {
+    showToast("Could not remove that API source.");
+  }
+}
+
 async function loadLiveUsage() {
   await loadUsageStatus();
   if (!state.usageStatus?.configured) {
-    showToast("Set OPENAI_ADMIN_KEY, then restart the Electron app.");
+    openApiSourceDialog();
     return;
   }
   try {
     state.usage = await window.codexGuard.loadOpenAIUsage({ days: 14 });
     renderUsage();
-    showToast("Loaded 14 days of OpenAI API Platform usage.");
+    showToast(state.usage.failedSources?.length ? `Loaded available sources. ${state.usage.failedSources.length} source needs attention.` : "Loaded live API usage.");
   } catch {
     state.usage = null;
     renderUsage();
@@ -386,10 +434,20 @@ async function exportHandoff() {
       repository: state.repository,
       usage: state.usage,
     });
-    if (result.cancelled) return showToast("Handoff export cancelled.");
-    showToast("Sanitized handoff report exported.");
+    showToast(`Created ${result.fileName}.`);
   } catch {
     showToast("Could not export the handoff report.");
+  }
+}
+
+async function importHandoff() {
+  if (!window.codexGuard?.importHandoff) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.importHandoff();
+    if (result.cancelled) return showToast("Handoff import cancelled.");
+    showToast("Handoff copied. Select a ChatGPT chat, paste, then press Enter.");
+  } catch {
+    showToast("Could not prepare that handoff document.");
   }
 }
 
@@ -416,12 +474,21 @@ $("#refresh-usage").addEventListener("click", () => state.usage?.source === "dem
 $("#source-list").addEventListener("click", (event) => {
   if (event.target.closest("[data-open-chatgpt]")) openChatGpt();
   if (event.target.closest("[data-load-api-source]")) loadLiveUsage();
+  if (event.target.closest("[data-add-api-source]")) openApiSourceDialog();
+  const removeButton = event.target.closest("[data-remove-api-source]");
+  if (removeButton) removeApiSource(removeButton.dataset.removeApiSource);
 });
+$("#add-api-source").addEventListener("click", openApiSourceDialog);
+$("#api-source-form").addEventListener("submit", addApiSource);
+$("#cancel-api-source").addEventListener("click", closeApiSourceDialog);
+$("#cancel-api-source-bottom").addEventListener("click", closeApiSourceDialog);
+$("#api-source-dialog").addEventListener("close", () => $("#api-source-form").reset());
 $("#scan-repository").addEventListener("click", scanRepository);
 $("#scan-codex").addEventListener("click", scanCodex);
 $("#refresh-sessions").addEventListener("click", () => refreshSessionCleanup().catch(() => showToast("Could not refresh local session cleanup.")));
 $("#refresh-profiles").addEventListener("click", loadGitHubProfiles);
 $("#export-handoff").addEventListener("click", exportHandoff);
+$("#import-handoff").addEventListener("click", importHandoff);
 $("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
 $("#branch-table").addEventListener("click", (event) => {
   const button = event.target.closest("[data-delete-branch]");

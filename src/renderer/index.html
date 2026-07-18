@@ -38,7 +38,8 @@
           <div class="top-actions">
             <span id="data-source-badge" class="demo-badge"><span class="status-dot"></span>No live source</span>
             <button id="load-live-usage" class="button button-quiet">API key needed</button>
-            <button id="export-handoff" class="button button-quiet">Export handoff</button>
+            <button id="import-handoff" class="button button-quiet">Import handoff</button>
+            <button id="export-handoff" class="button button-quiet">Create handoff</button>
             <button id="scan-repository" class="button button-primary">Scan repository</button>
           </div>
         </header>
@@ -69,7 +70,7 @@
           <article id="accounts" class="panel account-panel">
             <div class="panel-heading"><div><p class="eyebrow">Usage sources</p><h2>Connection status</h2></div><button class="icon-button" title="Refresh usage source" id="refresh-usage">R</button></div>
             <div id="account-list" class="account-list"></div>
-            <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Account access</p><h2>Connected sources</h2></div></div><div id="source-list" class="source-list"><div class="empty-state">Loading account sources.</div></div></div>
+            <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Account access</p><h2>Connected sources</h2></div><button id="add-api-source" class="button button-quiet">Add API source</button></div><div id="source-list" class="source-list"><div class="empty-state">Loading account sources.</div></div></div>
           </article>
         </section>
 
@@ -89,6 +90,17 @@
           </article>
         </section>
         <div id="toast" class="toast" role="status"></div>
+        <dialog id="api-source-dialog" class="app-dialog" aria-labelledby="api-source-title">
+          <form id="api-source-form" method="dialog">
+            <div class="dialog-heading"><div><p class="eyebrow">Live telemetry</p><h2 id="api-source-title">Connect OpenAI API source</h2></div><button id="cancel-api-source" class="icon-button" type="button" title="Close">X</button></div>
+            <label class="field-label" for="api-source-label">Source name</label>
+            <input id="api-source-label" class="text-input" name="label" maxlength="48" placeholder="Hackathon organization" required />
+            <label class="field-label" for="api-source-key">Admin API key</label>
+            <input id="api-source-key" class="text-input" name="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-admin-..." required />
+            <p class="dialog-note">The key is encrypted with Windows-protected storage and is never displayed, exported, or committed.</p>
+            <div class="dialog-actions"><button id="cancel-api-source-bottom" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Save encrypted source</button></div>
+          </form>
+        </dialog>
       </main>
     </div>
     <script type="module" src="./app.mjs"></script>

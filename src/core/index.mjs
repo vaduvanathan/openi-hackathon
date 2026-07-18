@@ -1,11 +1,12 @@
 export { scanRepository } from "./git-scanner.mjs";
 export { scanCodexState } from "./codex-state.mjs";
 export { getAccountSources } from "./account-sources.mjs";
+export { addApiSource, getEncryptedApiSource, listApiSources, removeApiSource } from "./api-source-store.mjs";
 export { listCodexSessionCandidates, listQuarantinedCodexSessions, quarantineCodexSession, restoreQuarantinedCodexSession } from "./codex-quarantine.mjs";
 export { appendAuditEvent } from "./audit.mjs";
 export { createCleanupPlan } from "./cleanup-plan.mjs";
 export { getDemoUsage } from "./demo-usage.mjs";
 export { scanGitHubProfiles } from "./github-profile.mjs";
-export { fetchOpenAIUsage, getOpenAIUsageStatus } from "./openai-usage.mjs";
+export { fetchOpenAIUsage, getOpenAIUsageStatus, mergeOpenAIUsageReports } from "./openai-usage.mjs";
 export { deleteSafeLocalBranch, listLocalBranchRecoveryManifests, restoreSafeLocalBranch } from "./repository-cleanup.mjs";
 export { createHandoffReport } from "./handoff-report.mjs";

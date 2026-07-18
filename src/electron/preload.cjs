@@ -16,7 +16,11 @@ contextBridge.exposeInMainWorld("codexGuard", {
   getOpenAIUsageStatus: () => ipcRenderer.invoke("openai:usage-status"),
   loadOpenAIUsage: (options) => ipcRenderer.invoke("openai:usage", options),
   getAccountSources: () => ipcRenderer.invoke("account:sources"),
+  getAccountStorageStatus: () => ipcRenderer.invoke("account:storage-status"),
+  addApiSource: (source) => ipcRenderer.invoke("account:add-api-source", source),
+  removeApiSource: (sourceId) => ipcRenderer.invoke("account:remove-api-source", sourceId),
   openChatGpt: () => ipcRenderer.invoke("account:open-chatgpt"),
   scanGitHubProfiles: (logins) => ipcRenderer.invoke("github:profiles", logins),
   exportHandoff: (reportData) => ipcRenderer.invoke("handoff:export", reportData),
+  importHandoff: () => ipcRenderer.invoke("handoff:import"),
 });

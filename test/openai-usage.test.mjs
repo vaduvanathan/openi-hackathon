@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchOpenAIUsage, getOpenAIUsageStatus } from "../src/core/index.mjs";
+import { fetchOpenAIUsage, getOpenAIUsageStatus, mergeOpenAIUsageReports } from "../src/core/index.mjs";
 
 test("reports whether the OpenAI Admin key is configured without returning it", () => {
   const status = getOpenAIUsageStatus({ OPENAI_ADMIN_KEY: "test-key" });
@@ -33,4 +33,15 @@ test("normalizes read-only OpenAI organization usage and costs", async () => {
   assert.equal(usage.accounts[0].detail, "4 API requests in the last 14 days");
   assert.equal(usage.costs.total, 1.25);
   assert.equal(usage.models[0].name, "gpt-test");
+});
+
+test("merges multiple organization reports into one dashboard series", () => {
+  const merged = mergeOpenAIUsageReports([
+    { accounts: [{ tokens: 10 }], costs: { currency: "USD", total: 1 }, daily: [{ input: 4, label: "01 Jul", output: 6, timestamp: 1, total: 10 }], models: [{ name: "gpt-test", tokens: 10 }], rangeDays: 14 },
+    { accounts: [{ tokens: 20 }], costs: { currency: "USD", total: 2 }, daily: [{ input: 8, label: "01 Jul", output: 12, timestamp: 1, total: 20 }], models: [{ name: "gpt-test", tokens: 20 }], rangeDays: 14 },
+  ]);
+  assert.equal(merged.accounts.length, 2);
+  assert.equal(merged.daily[0].total, 30);
+  assert.equal(merged.costs.total, 3);
+  assert.equal(merged.models[0].tokens, 30);
 });

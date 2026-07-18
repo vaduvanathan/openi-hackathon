@@ -35,7 +35,7 @@ The MVP does not read personal ChatGPT or Codex plan telemetry, chat history, cr
 
 ### OpenAI Platform Usage
 
-The current connector reads API Platform organization data only when the Electron process receives an `OPENAI_ADMIN_KEY` environment variable. It never displays or persists the key. It reads:
+The current connector reads API Platform organization data from a process-level `OPENAI_ADMIN_KEY` or from a user-approved named source encrypted by Electron safeStorage. It never displays, exports, logs, or commits the key. It reads:
 
 - `/organization/usage/completions`
 - `/organization/costs`
@@ -43,6 +43,8 @@ The current connector reads API Platform organization data only when the Electro
 This is separate from ChatGPT/Codex plan usage and should be labeled separately in the product.
 
 Personal ChatGPT or Codex subscription quota, credit balance, and server-side task history are not represented by this connector.
+
+Handoff exports are written automatically to the app's local handoff folder. Importing a selected handoff copies its text to the clipboard and opens ChatGPT, but the app does not inspect, select, or write into private ChatGPT chats.
 
 ## Core Data Contracts
 

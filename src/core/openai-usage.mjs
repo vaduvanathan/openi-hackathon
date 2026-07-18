@@ -56,6 +56,9 @@ export async function fetchOpenAIUsage({
   days = 14,
   fetcher = fetch,
   now = Date.now(),
+  sourceColor = "cyan",
+  sourceId = "openai-api-platform",
+  sourceName = "OpenAI API Platform",
 } = {}) {
   if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
     throw new Error("OpenAI Admin key is not configured.");
@@ -78,6 +81,7 @@ export async function fetchOpenAIUsage({
       input,
       label: formatDay(bucket.start_time),
       output,
+      timestamp: bucket.start_time,
       total: input + output,
     };
   });
@@ -109,12 +113,12 @@ export async function fetchOpenAIUsage({
 
   return {
     accounts: [{
-      color: "cyan",
+      color: sourceColor,
       detail: `${totalRequests.toLocaleString("en-US")} API requests in the last ${rangeDays} days`,
       footer: new Intl.NumberFormat("en-US", { currency, style: "currency" }).format(totalCost),
-      id: "openai-api-platform",
+      id: sourceId,
       kind: "Organization API usage",
-      name: "OpenAI API Platform",
+      name: sourceName,
       reset: null,
       status: "Live",
       tokens: totalTokens,
@@ -122,10 +126,57 @@ export async function fetchOpenAIUsage({
     }],
     costs: { currency, total: totalCost },
     daily,
-    label: "OpenAI API Platform",
+    label: sourceName,
     models,
     rangeDays,
     source: "openai-api-platform",
     updatedAt: new Date(now).toISOString(),
+  };
+}
+
+export function mergeOpenAIUsageReports(reports) {
+  if (!Array.isArray(reports) || reports.length === 0) throw new Error("At least one OpenAI usage report is required.");
+  const dailyByTimestamp = new Map();
+  const modelTotals = new Map();
+  const accounts = reports.flatMap((report) => report.accounts || []);
+  let totalCost = 0;
+  let currency = reports[0].costs?.currency || "USD";
+
+  for (const report of reports) {
+    totalCost += asNumber(report.costs?.total);
+    if (report.costs?.currency && report.costs.currency !== currency) currency = "USD";
+    for (const day of report.daily || []) {
+      const key = day.timestamp ?? day.label;
+      const current = dailyByTimestamp.get(key) || { input: 0, label: day.label, output: 0, timestamp: day.timestamp, total: 0 };
+      current.input += asNumber(day.input);
+      current.output += asNumber(day.output);
+      current.total += asNumber(day.total);
+      dailyByTimestamp.set(key, current);
+    }
+    for (const model of report.models || []) {
+      modelTotals.set(model.name, (modelTotals.get(model.name) || 0) + asNumber(model.tokens));
+    }
+  }
+
+  const totalTokens = accounts.reduce((total, account) => total + asNumber(account.tokens), 0);
+  const models = [...modelTotals.entries()]
+    .sort(([, firstTotal], [, secondTotal]) => secondTotal - firstTotal)
+    .slice(0, 8)
+    .map(([name, tokens], index) => ({
+      color: ["cyan", "violet", "amber", "green"][index % 4],
+      name,
+      share: totalTokens === 0 ? 0 : Math.round((tokens / totalTokens) * 100),
+      tokens,
+    }));
+
+  return {
+    accounts,
+    costs: { currency, total: totalCost },
+    daily: [...dailyByTimestamp.values()].sort((first, second) => (first.timestamp || 0) - (second.timestamp || 0)),
+    label: "OpenAI API Platform",
+    models,
+    rangeDays: reports[0].rangeDays,
+    source: "openai-api-platform",
+    updatedAt: new Date().toISOString(),
   };
 }
