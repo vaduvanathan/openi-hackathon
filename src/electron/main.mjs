@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } fr
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { addApiSource, addGitHubProfileConnection, appendAuditEvent, checkoutGitHubCliRepository, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, discoverLocalAgentWorktrees, discoverOpenAIDesktopClients, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubCliAccounts, listGitHubCliRepositories, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository, switchGitHubCliAccount } from "../core/index.mjs";
+import { addApiSource, addGitHubProfileConnection, appendAuditEvent, checkoutGitHubCliRepository, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, discoverLocalAgentWorktrees, discoverOpenAIDesktopClients, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, getPresentationGitHubWorkspace, getPresentationRepositoryScan, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubCliAccounts, listGitHubCliRepositories, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository, switchGitHubCliAccount } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -292,6 +292,8 @@ ipcMain.handle("github:cli-checkout", async (_event, repository) => {
   await appendAuditEvent(auditPath(), { repository: checkout.repository, type: checkout.cached ? "github-repository-refreshed" : "github-repository-cloned" });
   return checkout;
 });
+ipcMain.handle("github:presentation-workspace", () => getPresentationGitHubWorkspace());
+ipcMain.handle("github:presentation-scan", (_event, repository) => getPresentationRepositoryScan(repository));
 ipcMain.handle("github:connections", () => listGitHubProfileConnections(githubProfileStorePath()));
 ipcMain.handle("github:add-connection", async (_event, login) => {
   const profile = await addGitHubProfileConnection(githubProfileStorePath(), login);

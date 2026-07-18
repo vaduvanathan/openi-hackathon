@@ -1,4 +1,4 @@
-const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubProfiles: [], githubRepositories: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubMode: "live", githubPresentation: null, githubProfiles: [], githubRepositories: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -127,6 +127,7 @@ function renderUsage() {
 function renderRepository() {
   const result = state.repository;
   if (!result) return;
+  const presentation = Boolean(result.presentation);
   $("#repo-title").textContent = result.repoPath.split(/[\\/]/).pop() || result.repoPath;
   $("#repo-status").textContent = "Scanned";
   $("#repo-status").className = "pill";
@@ -135,13 +136,13 @@ function renderRepository() {
   $("#branch-table").innerHTML = result.branches.map((branch) => {
     const stateClass = branch.safeLocalDelete ? "state-safe" : branch.checkedOutWorktree || branch.protectedBranch ? "state-blocked" : "state-active";
     const stateLabel = branch.safeLocalDelete ? "Review" : branch.checkedOutWorktree ? "In worktree" : branch.protectedBranch ? "Protected" : branch.mergedIntoBase ? "Recent merge" : "Active / unmerged";
-    const action = branch.safeLocalDelete
+    const action = branch.safeLocalDelete && !presentation
       ? `<label class="row-choice"><input type="checkbox" data-select-branch="${escapeHtml(branch.name)}" ${state.selectedBranches.has(branch.name) ? "checked" : ""} aria-label="Select ${escapeHtml(branch.name)}" /><span>Select</span></label>`
-      : "Keep";
+      : presentation && branch.safeLocalDelete ? "Presentation only" : "Keep";
     return `<tr><td>${escapeHtml(branch.name)}</td><td>${branch.inactiveDays === null ? "--" : `${branch.inactiveDays}d`}</td><td><span class="branch-state ${stateClass}">${stateLabel}</span></td><td>${action}</td></tr>`;
   }).join("");
   $("#branch-selection-count").textContent = `${state.selectedBranches.size} selected`;
-  $("#delete-selected-branches").disabled = state.selectedBranches.size === 0;
+  $("#delete-selected-branches").disabled = presentation || state.selectedBranches.size === 0;
   renderRemoteCandidates();
 }
 
@@ -154,10 +155,11 @@ function renderRemoteCandidates() {
     container.innerHTML = `<div class="empty-state">No merged, stale origin branches need remote cleanup review.</div>`;
     return;
   }
+  const presentation = Boolean(state.repository?.presentation);
   container.innerHTML = candidates.map((branch) => `
     <div class="remote-row">
       <div><strong>${escapeHtml(branch.name)}</strong><span>Merged into ${escapeHtml(state.repository.baseBranch)} - ${branch.inactiveDays}d inactive - GitHub PR check required</span></div>
-      <button class="button button-danger table-action" data-delete-remote-branch="${escapeHtml(branch.name)}">Verify & delete</button>
+      ${presentation ? `<span class="pill">Presentation only</span>` : `<button class="button button-danger table-action" data-delete-remote-branch="${escapeHtml(branch.name)}">Verify & delete</button>`}
     </div>`).join("");
 }
 
@@ -410,6 +412,7 @@ async function scanManualRepository() {
   if (!window.codexGuard?.chooseRepository) return showToast("Electron bridge is not available.");
   const repositoryPath = await window.codexGuard.chooseRepository();
   if (!repositoryPath) return;
+  state.githubMode = "live";
   await applyRepositoryScan(await window.codexGuard.scanRepository(repositoryPath));
   showToast(`Scanned ${state.repository.summary.localBranchCount} local branches.`);
 }
@@ -429,6 +432,17 @@ function renderRepositoryDialog() {
   const select = $("#github-cli-account");
   const list = $("#github-repository-list");
   const account = state.githubCli.accounts.find((item) => item.active) || state.githubCli.accounts[0];
+  if (state.githubMode === "presentation") {
+    notice.textContent = "Presentation Mode uses seeded repository metadata. It contains no GitHub token and does not access a live account.";
+    select.disabled = false;
+    select.innerHTML = state.githubCli.accounts.map((item) => `<option value="${escapeHtml(item.login)}" ${item.active ? "selected" : ""}>${escapeHtml(item.login)} (presentation)</option>`).join("");
+    if (!state.githubRepositories.length) {
+      list.innerHTML = `<div class="empty-state">Choose an account to load presentation repositories.</div>`;
+      return;
+    }
+    list.innerHTML = state.githubRepositories.map((repository) => `<div class="github-repository-row"><div><strong>${escapeHtml(repository.nameWithOwner)}</strong><span>Presentation data - ${repository.isPrivate ? "Private" : "Public"} - updated ${escapeHtml(formatTimestamp(repository.updatedAt))}</span></div><button class="button button-quiet" data-scan-github-repository="${escapeHtml(repository.nameWithOwner)}">Preview scan</button></div>`).join("");
+    return;
+  }
   if (!state.githubCli.available) {
     notice.textContent = "GitHub CLI is not signed in. Use gh auth login, then refresh this dialog.";
     select.innerHTML = `<option>GitHub CLI unavailable</option>`;
@@ -448,11 +462,23 @@ function renderRepositoryDialog() {
 
 async function loadGitHubCliAccounts() {
   if (!window.codexGuard?.getGitHubCliAccounts) return showToast("Electron bridge is not available.");
+  state.githubMode = "live";
+  state.githubPresentation = null;
   state.githubCli = await window.codexGuard.getGitHubCliAccounts();
   state.githubRepositories = [];
   renderRepositoryDialog();
   const active = state.githubCli.accounts.find((item) => item.active) || state.githubCli.accounts[0];
   if (active) await loadGitHubRepositories(active.login);
+}
+
+async function loadPresentationGitHubWorkspace() {
+  if (!window.codexGuard?.getPresentationGitHubWorkspace) return showToast("Electron bridge is not available.");
+  state.githubPresentation = await window.codexGuard.getPresentationGitHubWorkspace();
+  state.githubMode = "presentation";
+  state.githubCli = { accounts: state.githubPresentation.accounts, available: true };
+  const active = state.githubCli.accounts.find((item) => item.active) || state.githubCli.accounts[0];
+  state.githubRepositories = state.githubPresentation.repositoriesByAccount[active.login] || [];
+  renderRepositoryDialog();
 }
 
 async function loadGitHubRepositories(login) {
@@ -471,6 +497,12 @@ async function loadGitHubRepositories(login) {
 async function changeGitHubCliAccount() {
   const login = $("#github-cli-account").value;
   if (!login || !window.codexGuard?.switchGitHubCliAccount) return;
+  if (state.githubMode === "presentation") {
+    state.githubCli.accounts = state.githubCli.accounts.map((account) => ({ ...account, active: account.login === login }));
+    state.githubRepositories = state.githubPresentation.repositoriesByAccount[login] || [];
+    renderRepositoryDialog();
+    return;
+  }
   try {
     state.githubCli = await window.codexGuard.switchGitHubCliAccount(login);
     await loadGitHubRepositories(login);
@@ -480,6 +512,16 @@ async function changeGitHubCliAccount() {
 }
 
 async function scanGitHubRepository(repository) {
+  if (state.githubMode === "presentation") {
+    try {
+      await applyRepositoryScan(await window.codexGuard.scanPresentationRepository(repository));
+      closeRepositoryDialog();
+      showToast(`Loaded presentation scan for ${repository}.`);
+    } catch {
+      showToast("Could not load the presentation repository scan.");
+    }
+    return;
+  }
   if (!window.codexGuard?.checkoutGitHubCliRepository) return showToast("Electron bridge is not available.");
   try {
     const checkout = await window.codexGuard.checkoutGitHubCliRepository(repository);
@@ -789,6 +831,7 @@ $("#close-repository-dialog").addEventListener("click", closeRepositoryDialog);
 $("#close-repository-dialog-bottom").addEventListener("click", closeRepositoryDialog);
 $("#repository-dialog").addEventListener("close", () => { state.githubRepositories = []; });
 $("#refresh-github-cli").addEventListener("click", loadGitHubCliAccounts);
+$("#use-presentation-mode").addEventListener("click", loadPresentationGitHubWorkspace);
 $("#github-cli-account").addEventListener("change", changeGitHubCliAccount);
 $("#github-repository-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-scan-github-repository]");

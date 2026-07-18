@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("codexGuard", {
   switchGitHubCliAccount: (login) => ipcRenderer.invoke("github:cli-switch-account", login),
   listGitHubCliRepositories: (login) => ipcRenderer.invoke("github:cli-repositories", login),
   checkoutGitHubCliRepository: (repository) => ipcRenderer.invoke("github:cli-checkout", repository),
+  getPresentationGitHubWorkspace: () => ipcRenderer.invoke("github:presentation-workspace"),
+  scanPresentationRepository: (repository) => ipcRenderer.invoke("github:presentation-scan", repository),
   getGitHubConnections: () => ipcRenderer.invoke("github:connections"),
   addGitHubConnection: (login) => ipcRenderer.invoke("github:add-connection", login),
   removeGitHubConnection: (login) => ipcRenderer.invoke("github:remove-connection", login),

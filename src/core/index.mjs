@@ -11,6 +11,7 @@ export { addGitHubProfileConnection, listGitHubProfileConnections, removeGitHubP
 export { checkoutGitHubCliRepository, listGitHubCliAccounts, listGitHubCliRepositories, switchGitHubCliAccount } from "./github-cli.mjs";
 export { discoverLocalAgentWorktrees } from "./local-worktree-discovery.mjs";
 export { discoverOpenAIDesktopClients } from "./desktop-client-discovery.mjs";
+export { getPresentationGitHubWorkspace, getPresentationRepositoryScan } from "./presentation-github.mjs";
 export { fetchOpenAIUsage, getOpenAIUsageStatus, mergeOpenAIUsageReports } from "./openai-usage.mjs";
 export { deleteSafeLocalBranch, deleteSafeLocalBranches, listLocalBranchRecoveryManifests, restoreSafeLocalBranch } from "./repository-cleanup.mjs";
 export { deleteVerifiedRemoteBranch } from "./remote-cleanup.mjs";
