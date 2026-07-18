@@ -1,4 +1,4 @@
-import { copyFile, lstat, mkdir, readdir, rename, unlink } from "node:fs/promises";
+import { copyFile, lstat, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { appendAuditEvent } from "./audit.mjs";
@@ -8,6 +8,8 @@ const PROTECTED_NAMES = new Set(["auth.json", ".env", ".env.local"]);
 const SESSION_CATEGORIES = new Set(["sessions", "archived_sessions"]);
 const MAX_CANDIDATES = 500;
 const MAX_DEPTH = 16;
+const MAX_TITLE_BYTES = 128_000;
+const MAX_TITLE_LENGTH = 140;
 
 function defaultCodexHome() {
   return process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
@@ -43,7 +45,56 @@ function candidateFromInfo(category, categoryRoot, filePath, info, now) {
     modifiedAt,
     relativePath: path.relative(categoryRoot, filePath),
     size: info.size,
+    taskTitle: "Untitled local task",
   };
+}
+
+function textFromContent(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((item) => item && typeof item === "object" && typeof item.text === "string")
+      .map((item) => item.text)
+      .join("\n");
+  }
+  if (content && typeof content === "object" && typeof content.text === "string") return content.text;
+  return "";
+}
+
+function safeTaskTitle(text) {
+  const normalized = text
+    .replace(/\b(sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|Bearer\s+\S+)/gi, "[redacted]")
+    .replace(/\b(api[_ -]?key|token|secret|password)\s*[:=]\s*\S+/gi, "$1: [redacted]")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized || /AGENTS\.md instructions|<INSTRUCTIONS>|<permissions instructions>|<environment_context>|<app-context>|<developer/i.test(normalized)) return null;
+  return normalized.length > MAX_TITLE_LENGTH ? `${normalized.slice(0, MAX_TITLE_LENGTH - 3).trimEnd()}...` : normalized;
+}
+
+async function readTaskTitle(filePath) {
+  let handle;
+  try {
+    handle = await open(filePath, "r");
+    const buffer = Buffer.alloc(MAX_TITLE_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    for (const line of buffer.subarray(0, bytesRead).toString("utf8").split(/\r?\n/)) {
+      if (!line) continue;
+      try {
+        const record = JSON.parse(line);
+        const payload = record?.type === "response_item" ? record.payload : null;
+        if (payload?.type !== "message" || payload?.role !== "user") continue;
+        const title = safeTaskTitle(textFromContent(payload.content));
+        if (title) return title;
+      } catch {
+        // Ignore incomplete JSONL records and keep looking for a user message.
+      }
+    }
+  } catch {
+    // Titles are optional metadata; listing local sessions still succeeds without one.
+  } finally {
+    await handle?.close();
+  }
+  return "Untitled local task";
 }
 
 async function collectCandidates(category, categoryRoot, directoryPath, candidates, now, depth = 0) {
@@ -88,6 +139,9 @@ export async function listCodexSessionCandidates(codexHome = defaultCodexHome(),
   for (const category of SESSION_CATEGORIES) {
     const categoryRoot = path.join(codexHome, category);
     await collectCandidates(category, categoryRoot, categoryRoot, candidates, now);
+  }
+  for (const candidate of candidates) {
+    candidate.taskTitle = await readTaskTitle(path.join(codexHome, candidate.category, candidate.relativePath));
   }
   return candidates.sort((first, second) => Date.parse(first.modifiedAt) - Date.parse(second.modifiedAt));
 }

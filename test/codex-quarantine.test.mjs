@@ -12,12 +12,16 @@ test("quarantines and restores a selected local Codex session without touching p
   const quarantineDirectory = path.join(codexHome, "app-data", "quarantine");
   const auditPath = path.join(codexHome, "app-data", "audit", "events.jsonl");
   await mkdir(path.join(sessions, "nested"), { recursive: true });
-  await writeFile(path.join(sessions, "nested", "old-session.jsonl"), "session payload");
+  await writeFile(path.join(sessions, "nested", "old-session.jsonl"), [
+    JSON.stringify({ payload: { content: [{ text: "# AGENTS.md instructions" }], role: "user", type: "message" }, type: "response_item" }),
+    JSON.stringify({ payload: { content: [{ text: "Make the Windows branch cleanup workflow easier to review." }], role: "user", type: "message" }, type: "response_item" }),
+  ].join("\n"));
   await writeFile(path.join(sessions, "auth.json"), "protected credential data");
   await writeFile(path.join(sessions, ".env"), "protected environment data");
 
   const candidates = await listCodexSessionCandidates(codexHome, { now: Date.parse("2026-07-18T12:00:00Z") });
   assert.deepEqual(candidates.map((candidate) => candidate.relativePath), [path.join("nested", "old-session.jsonl")]);
+  assert.equal(candidates[0].taskTitle, "Make the Windows branch cleanup workflow easier to review.");
 
   const result = await quarantineCodexSession(codexHome, candidates[0], {
     auditPath,

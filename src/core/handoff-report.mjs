@@ -14,7 +14,7 @@ function formatTokens(tokens) {
   return String(tokens);
 }
 
-export function createHandoffReport({ brief, codex, repository, usage } = {}) {
+export function createHandoffReport({ brief, codex, repository, selectedTask, usage } = {}) {
   const lines = [
     "# Codex Session Guard Handoff",
     "",
@@ -34,6 +34,13 @@ export function createHandoffReport({ brief, codex, repository, usage } = {}) {
     if (handoffBrief.currentState) lines.push("", "### Current State", "", handoffBrief.currentState);
     if (handoffBrief.nextSteps) lines.push("", "### Next Steps", "", handoffBrief.nextSteps);
     lines.push("");
+  }
+
+  if (selectedTask?.taskTitle) {
+    lines.push("## Selected Local Task", "", `- Task: ${selectedTask.taskTitle}`);
+    if (selectedTask.category) lines.push(`- Local source: ${selectedTask.category}`);
+    if (selectedTask.modifiedAt) lines.push(`- Last modified: ${selectedTask.modifiedAt}`);
+    lines.push("- Raw chat transcript was not copied into this handoff.", "");
   }
 
   lines.push(

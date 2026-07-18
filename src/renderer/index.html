@@ -17,11 +17,11 @@
           </div>
         </div>
         <nav class="nav-list" aria-label="Primary navigation">
-          <button class="nav-item active" data-page="overview"><span class="nav-icon">O</span>Overview</button>
-          <button class="nav-item" data-page="repositories"><span class="nav-icon">R</span>Repositories</button>
+          <button class="nav-item active" data-page="handoffs"><span class="nav-icon">H</span>Handoffs</button>
           <button class="nav-item" data-page="local-sessions"><span class="nav-icon">S</span>Local state</button>
+          <button class="nav-item" data-page="repositories"><span class="nav-icon">R</span>Repositories</button>
           <button class="nav-item" data-page="accounts"><span class="nav-icon">A</span>Accounts</button>
-          <button class="nav-item" data-page="handoffs"><span class="nav-icon">H</span>Handoffs</button>
+          <button class="nav-item" data-page="overview"><span class="nav-icon">U</span>Usage</button>
           <button class="nav-item" data-page="activity"><span class="nav-icon">L</span>Activity</button>
         </nav>
         <div class="sidebar-footer">
@@ -31,12 +31,12 @@
       </aside>
 
       <main class="content">
-        <section id="overview" class="app-page active" aria-label="Overview">
+        <section id="overview" class="app-page" aria-label="Usage">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Codex workspace / overview</p>
-            <h1>Usage at a glance</h1>
-            <p class="subhead">See account activity, local state, and cleanup candidates in one view.</p>
+            <p class="eyebrow">OpenAI API Platform</p>
+            <h1>Usage</h1>
+            <p class="subhead">Review live organization activity after connecting your telemetry sources in Accounts.</p>
           </div>
           <div class="top-actions">
             <span id="data-source-badge" class="demo-badge"><span class="status-dot"></span>No live source</span>
@@ -104,8 +104,8 @@
             <div class="session-block"><div class="panel-heading compact"><div><p class="eyebrow">Local session cleanup</p><h2>Session files</h2></div><button id="refresh-sessions" class="button button-quiet">Refresh</button></div><div class="selection-toolbar"><span id="session-selection-count">0 selected</span><button id="quarantine-selected-sessions" class="button button-danger" disabled>Quarantine selected</button></div><div id="session-list" class="session-list"><div class="empty-state">Scan local Codex state to review session files.</div></div><div class="session-recovery"><p class="eyebrow">Quarantine recovery</p><div id="session-recovery-list" class="session-list"><div class="empty-state">No quarantined sessions are available to restore.</div></div></div></div>
           </article>
         </section>
-        <section id="handoffs" class="app-page" aria-label="Handoffs">
-          <header class="page-header"><div><p class="eyebrow">Context continuity</p><h1>Handoffs</h1><p class="subhead">Write a specific continuation brief, save a sanitized document locally, and prepare it for ChatGPT.</p></div><div class="inline-actions"><button id="import-handoff" class="button button-quiet">Prepare for ChatGPT</button><button id="export-handoff" class="button button-primary">Create handoff</button></div></header>
+        <section id="handoffs" class="app-page active" aria-label="Handoffs">
+          <header class="page-header"><div><p class="eyebrow">Context continuity</p><h1>Handoffs</h1><p class="subhead">Choose a local Codex task, create a Markdown handoff, and prepare its sanitized context for the next task.</p></div><div class="inline-actions"><button id="import-handoff" class="button button-quiet">Copy & open ChatGPT</button><button id="export-handoff" class="button button-primary">Create handoff</button></div></header>
           <article class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">Saved handoffs</p><h2>Local handoff documents</h2></div><button id="open-handoff-directory" class="button button-quiet">Open folder</button></div><div id="handoff-list" class="audit-list"><div class="empty-state">Create a handoff to save a sanitized context package here automatically.</div></div></article>
         </section>
         <section id="activity" class="app-page" aria-label="Activity">
@@ -116,6 +116,9 @@
         <dialog id="handoff-dialog" class="app-dialog handoff-dialog" aria-labelledby="handoff-title">
           <form id="handoff-form" method="dialog">
             <div class="dialog-heading"><div><p class="eyebrow">Create a handoff</p><h2 id="handoff-title">Describe what should continue</h2></div><button id="cancel-handoff" class="icon-button" type="button" title="Close">X</button></div>
+            <label class="field-label" for="handoff-task">Local Codex task</label>
+            <select id="handoff-task" class="text-input" aria-label="Choose a local Codex task"><option>Loading local tasks...</option></select>
+            <p class="dialog-note task-note">Task titles are derived from the first meaningful local user prompt. Raw chat transcripts are not copied into the handoff.</p>
             <label class="field-label" for="handoff-name">Handoff title</label>
             <input id="handoff-name" class="text-input" maxlength="90" placeholder="Continue Codex Guard MVP" required />
             <label class="field-label" for="handoff-goal">Goal</label>
@@ -125,7 +128,7 @@
             <label class="field-label" for="handoff-next">Next steps</label>
             <textarea id="handoff-next" class="text-input" maxlength="3000" placeholder="What should happen next?"></textarea>
             <label class="check-row"><input id="handoff-open-chatgpt" type="checkbox" checked />Copy the handoff and open ChatGPT after saving</label>
-            <p class="dialog-note">The document is saved automatically. ChatGPT does not offer a supported external file-attachment or composer-control API, so the app copies the sanitized handoff and opens ChatGPT for you to review and send.</p>
+            <p class="dialog-note">The Markdown document is saved automatically. ChatGPT does not offer a supported external file-attachment or composer-control API, so the app copies the sanitized handoff and opens ChatGPT for you to paste and send.</p>
             <div class="dialog-actions"><button id="cancel-handoff-bottom" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Save handoff</button></div>
           </form>
         </dialog>

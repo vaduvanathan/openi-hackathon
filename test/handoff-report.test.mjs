@@ -33,3 +33,12 @@ test("includes an explicit user-authored continuation brief", () => {
   assert.match(report, /Finish the account dashboard/);
   assert.match(report, /Run the visual review/);
 });
+
+test("identifies the selected local task without embedding a raw transcript", () => {
+  const report = createHandoffReport({
+    selectedTask: { category: "sessions", modifiedAt: "2026-07-18T12:00:00.000Z", taskTitle: "Improve the handoff picker" },
+  });
+
+  assert.match(report, /Task: Improve the handoff picker/);
+  assert.match(report, /Raw chat transcript was not copied/);
+});

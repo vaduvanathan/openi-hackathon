@@ -1,4 +1,4 @@
-const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, demoApi: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubMode: "live", githubPresentation: null, githubProfiles: [], githubRepositories: [], handoffs: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionInspections: new Map(), sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, demoApi: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubMode: "live", githubPresentation: null, githubProfiles: [], githubRepositories: [], handoffTaskChoices: [], handoffs: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionInspections: new Map(), sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -276,7 +276,7 @@ function renderSessionCleanup() {
       const inspection = state.sessionInspections.get(key);
       return `
       <div class="session-row">
-        <div><strong>${escapeHtml(candidate.relativePath)}</strong><span>${escapeHtml(candidate.category)} - ${candidate.ageDays}d old - ${formatBytes(candidate.size)}</span></div>
+        <div><strong>${escapeHtml(candidate.taskTitle || "Untitled local task")}</strong><span>${escapeHtml(candidate.category)} - ${candidate.ageDays}d old - ${formatBytes(candidate.size)} - ${escapeHtml(candidate.relativePath)}</span></div>
         <div class="session-actions"><button class="button button-quiet table-action" data-inspect-session-category="${escapeHtml(candidate.category)}" data-inspect-session-path="${escapeHtml(candidate.relativePath)}">${inspection ? "Hide details" : "Inspect"}</button><label class="row-choice"><input type="checkbox" data-select-session-category="${escapeHtml(candidate.category)}" data-select-session-path="${escapeHtml(candidate.relativePath)}" ${state.selectedSessions.has(key) ? "checked" : ""} aria-label="Select ${escapeHtml(candidate.relativePath)}" /><span>Select</span></label></div>
         ${inspection ? renderSessionInspection(inspection) : ""}
       </div>`;
@@ -637,9 +637,10 @@ async function changeGitHubCliAccount() {
 
 async function scanGitHubRepository(repository) {
   if (state.githubMode === "presentation") {
+    closeRepositoryDialog();
+    showToast(`Loading presentation scan for ${repository}.`);
     try {
       await applyRepositoryScan(await window.codexGuard.scanPresentationRepository(repository));
-      closeRepositoryDialog();
       showToast(`Loaded presentation scan for ${repository}.`);
     } catch {
       showToast("Could not load the presentation repository scan.");
@@ -647,10 +648,11 @@ async function scanGitHubRepository(repository) {
     return;
   }
   if (!window.codexGuard?.checkoutGitHubCliRepository) return showToast("Electron bridge is not available.");
+  closeRepositoryDialog();
+  showToast(`Preparing ${repository} for a local scan.`);
   try {
     const checkout = await window.codexGuard.checkoutGitHubCliRepository(repository);
     await applyRepositoryScan(await window.codexGuard.scanRepository(checkout.repositoryPath));
-    closeRepositoryDialog();
     showToast(`${checkout.cached ? "Refreshed" : "Cloned and scanned"} ${checkout.repository}.`);
   } catch {
     showToast("Could not prepare and scan that GitHub repository.");
@@ -869,15 +871,52 @@ async function restoreLocalBranch(manifestId) {
   }
 }
 
-function openHandoffDialog() {
+function renderHandoffTaskOptions() {
+  const select = $("#handoff-task");
+  if (!select) return;
+  const candidates = (state.sessionCandidates || [])
+    .slice()
+    .sort((first, second) => Date.parse(second.modifiedAt) - Date.parse(first.modifiedAt))
+    .slice(0, 100);
+  state.handoffTaskChoices = candidates;
+  select.innerHTML = `<option value="">Write a manual handoff</option>${candidates.map((candidate, index) => `<option value="${index}">${escapeHtml(candidate.taskTitle || "Untitled local task")} - ${candidate.ageDays}d old</option>`).join("")}`;
+  select.disabled = candidates.length === 0;
+}
+
+async function openHandoffDialog() {
   const dialog = $("#handoff-dialog");
   if (!dialog.open) dialog.showModal();
-  $("#handoff-name").focus();
+  const select = $("#handoff-task");
+  select.innerHTML = `<option>Loading local tasks...</option>`;
+  select.disabled = true;
+  try {
+    await refreshSessionCleanup();
+    renderHandoffTaskOptions();
+  } catch {
+    select.innerHTML = `<option value="">Local tasks could not be loaded</option>`;
+  }
+  select.focus();
 }
 
 function closeHandoffDialog() {
   $("#handoff-form").reset();
   $("#handoff-dialog").close();
+}
+
+function selectedHandoffTask() {
+  const selection = $("#handoff-task").value;
+  if (!selection) return null;
+  const index = Number(selection);
+  return Number.isInteger(index) ? state.handoffTaskChoices[index] || null : null;
+}
+
+function applySelectedHandoffTask() {
+  const task = selectedHandoffTask();
+  if (!task) return;
+  $("#handoff-name").value = `Continue: ${task.taskTitle || "local task"}`;
+  $("#handoff-goal").value = `Continue the selected local task: ${task.taskTitle || "Untitled local task"}.`;
+  $("#handoff-state").value = `Local ${task.category} session last modified ${formatTimestamp(task.modifiedAt)}.`;
+  $("#handoff-next").focus();
 }
 
 async function exportHandoff(event) {
@@ -896,6 +935,7 @@ async function exportHandoff(event) {
       codex: state.codex,
       openChatGpt: $("#handoff-open-chatgpt").checked,
       repository: state.repository,
+      selectedTask: selectedHandoffTask(),
       usage: state.usage,
     });
     closeHandoffDialog();
@@ -1074,6 +1114,7 @@ $("#export-handoff").addEventListener("click", openHandoffDialog);
 $("#import-handoff").addEventListener("click", importHandoff);
 $("#open-handoff-directory").addEventListener("click", openHandoffDirectory);
 $("#handoff-form").addEventListener("submit", exportHandoff);
+$("#handoff-task").addEventListener("change", applySelectedHandoffTask);
 $("#cancel-handoff").addEventListener("click", closeHandoffDialog);
 $("#cancel-handoff-bottom").addEventListener("click", closeHandoffDialog);
 $("#handoff-dialog").addEventListener("close", () => $("#handoff-form").reset());
