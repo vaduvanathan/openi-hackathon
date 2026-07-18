@@ -1,5 +1,6 @@
 export { scanRepository } from "./git-scanner.mjs";
 export { scanCodexState } from "./codex-state.mjs";
+export { listCodexSessionCandidates, listQuarantinedCodexSessions, quarantineCodexSession, restoreQuarantinedCodexSession } from "./codex-quarantine.mjs";
 export { appendAuditEvent } from "./audit.mjs";
 export { createCleanupPlan } from "./cleanup-plan.mjs";
 export { getDemoUsage } from "./demo-usage.mjs";

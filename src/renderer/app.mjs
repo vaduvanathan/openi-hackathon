@@ -1,5 +1,5 @@
 const profiles = ["vaduvanathan", "nathan-build"];
-const state = { branchRecoveries: [], codex: null, githubProfiles: [], repository: null, usage: null, usageStatus: null };
+const state = { branchRecoveries: [], codex: null, githubProfiles: [], repository: null, sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -16,6 +16,12 @@ function formatTokens(value) {
 function formatTimestamp(value) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : "Unknown time";
+}
+
+function formatBytes(value) {
+  if (value >= 1_048_576) return `${(value / 1_048_576).toFixed(1)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${value} B`;
 }
 
 function showToast(message) {
@@ -159,6 +165,34 @@ function renderCodexState() {
   $("#state-list").innerHTML = categories.length ? categories.map((category) => `<div class="state-row"><span>${escapeHtml(category.root.split(/[\\/]/).pop())}</span><strong>${category.fileCount} files - ${formatTokens(category.totalBytes)}B</strong></div>`).join("") : `<div class="empty-state">No common Codex state folders found.</div>`;
 }
 
+function renderSessionCleanup() {
+  const candidateContainer = $("#session-list");
+  const recoveryContainer = $("#session-recovery-list");
+  if (state.sessionCandidates === null) {
+    candidateContainer.innerHTML = `<div class="empty-state">Scan local Codex state to review session files.</div>`;
+  } else if (!state.sessionCandidates.length) {
+    candidateContainer.innerHTML = `<div class="empty-state">No local session files are available for quarantine.</div>`;
+  } else {
+    const visibleCandidates = state.sessionCandidates.slice(0, 12);
+    candidateContainer.innerHTML = visibleCandidates.map((candidate) => `
+      <div class="session-row">
+        <div><strong>${escapeHtml(candidate.relativePath)}</strong><span>${escapeHtml(candidate.category)} - ${candidate.ageDays}d old - ${formatBytes(candidate.size)}</span></div>
+        <button class="button button-quiet" data-quarantine-category="${escapeHtml(candidate.category)}" data-quarantine-path="${escapeHtml(candidate.relativePath)}">Quarantine</button>
+      </div>`).join("") + (state.sessionCandidates.length > visibleCandidates.length ? `<p class="list-note">Showing the 12 oldest of ${state.sessionCandidates.length} local session files.</p>` : "");
+  }
+
+  const quarantines = state.sessionRecoveries.filter((manifest) => manifest.status === "quarantined");
+  if (!quarantines.length) {
+    recoveryContainer.innerHTML = `<div class="empty-state">No quarantined sessions are available to restore.</div>`;
+    return;
+  }
+  recoveryContainer.innerHTML = quarantines.map((manifest) => `
+    <div class="session-row">
+      <div><strong>${escapeHtml(manifest.relativePath)}</strong><span>${escapeHtml(manifest.category)} - quarantined ${escapeHtml(formatTimestamp(manifest.quarantinedAt || manifest.createdAt))}</span></div>
+      <button class="button button-quiet" data-restore-session="${escapeHtml(manifest.id)}">Restore</button>
+    </div>`).join("");
+}
+
 function renderGitHubProfiles() {
   const container = $("#github-profiles");
   if (!state.githubProfiles.length) return;
@@ -209,9 +243,61 @@ async function scanRepository() {
 
 async function scanCodex() {
   if (!window.codexGuard?.scanCodexState) return showToast("Electron bridge is not available.");
+  try {
+    state.codex = await window.codexGuard.scanCodexState();
+    renderCodexState();
+    await refreshSessionCleanup();
+    showToast("Local Codex state scanned.");
+  } catch {
+    showToast("Could not scan local Codex state.");
+  }
+}
+
+async function refreshSessionCleanup() {
+  if (!window.codexGuard?.listCodexSessionCandidates || !window.codexGuard?.listQuarantinedSessions) return;
+  const [candidates, recoveries] = await Promise.all([
+    window.codexGuard.listCodexSessionCandidates(),
+    window.codexGuard.listQuarantinedSessions(),
+  ]);
+  state.sessionCandidates = candidates;
+  state.sessionRecoveries = recoveries;
+  renderSessionCleanup();
+}
+
+async function loadSessionRecoveries() {
+  if (!window.codexGuard?.listQuarantinedSessions) return;
+  state.sessionRecoveries = await window.codexGuard.listQuarantinedSessions();
+  renderSessionCleanup();
+}
+
+async function refreshCodexAfterSessionChange() {
   state.codex = await window.codexGuard.scanCodexState();
   renderCodexState();
-  showToast("Local Codex state scanned.");
+  await refreshSessionCleanup();
+}
+
+async function quarantineCodexSession(category, relativePath) {
+  if (!window.codexGuard?.quarantineCodexSession) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.quarantineCodexSession({ category, relativePath });
+    if (result.cancelled) return showToast("Session quarantine cancelled.");
+    await refreshCodexAfterSessionChange();
+    showToast("Local session quarantined.");
+  } catch {
+    showToast("The selected session file could not be quarantined safely.");
+  }
+}
+
+async function restoreQuarantinedSession(manifestId) {
+  if (!window.codexGuard?.restoreCodexSession) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.restoreCodexSession(manifestId);
+    if (result.cancelled) return showToast("Session restore cancelled.");
+    await refreshCodexAfterSessionChange();
+    showToast("Local session restored.");
+  } catch {
+    showToast("The local session could not be restored safely.");
+  }
 }
 
 async function deleteLocalBranch(branchName) {
@@ -281,7 +367,7 @@ async function loadGitHubProfiles() {
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
   button.classList.add("active");
-  showToast(`${button.textContent.trim()} view is coming in the next build batch.`);
+  document.querySelector(button.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }));
 document.querySelectorAll(".range-button").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".range-button").forEach((item) => item.classList.remove("active"));
@@ -293,6 +379,7 @@ $("#load-demo-usage").addEventListener("click", loadDemoUsage);
 $("#refresh-usage").addEventListener("click", () => state.usage?.source === "demo" ? loadDemoUsage() : loadLiveUsage());
 $("#scan-repository").addEventListener("click", scanRepository);
 $("#scan-codex").addEventListener("click", scanCodex);
+$("#refresh-sessions").addEventListener("click", () => refreshSessionCleanup().catch(() => showToast("Could not refresh local session cleanup.")));
 $("#refresh-profiles").addEventListener("click", loadGitHubProfiles);
 $("#export-handoff").addEventListener("click", exportHandoff);
 $("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
@@ -304,8 +391,17 @@ $("#recovery-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-restore-branch]");
   if (button) restoreLocalBranch(button.dataset.restoreBranch);
 });
+$("#session-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-quarantine-category]");
+  if (button) quarantineCodexSession(button.dataset.quarantineCategory, button.dataset.quarantinePath);
+});
+$("#session-recovery-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-restore-session]");
+  if (button) restoreQuarantinedSession(button.dataset.restoreSession);
+});
 
 renderUsage();
 await loadUsageStatus();
 await loadGitHubProfiles();
 await loadBranchRecoveries();
+await loadSessionRecoveries();

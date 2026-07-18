@@ -17,10 +17,10 @@
           </div>
         </div>
         <nav class="nav-list" aria-label="Primary navigation">
-          <button class="nav-item active" data-view="overview"><span class="nav-icon">O</span>Overview</button>
-          <button class="nav-item" data-view="repositories"><span class="nav-icon">R</span>Repositories</button>
-          <button class="nav-item" data-view="sessions"><span class="nav-icon">S</span>Local sessions</button>
-          <button class="nav-item" data-view="accounts"><span class="nav-icon">A</span>Accounts</button>
+          <button class="nav-item active" data-target="#overview"><span class="nav-icon">O</span>Overview</button>
+          <button class="nav-item" data-target="#repositories"><span class="nav-icon">R</span>Repositories</button>
+          <button class="nav-item" data-target="#local-sessions"><span class="nav-icon">S</span>Local sessions</button>
+          <button class="nav-item" data-target="#accounts"><span class="nav-icon">A</span>Accounts</button>
         </nav>
         <div class="sidebar-footer">
           <span class="status-dot"></span>
@@ -29,7 +29,7 @@
       </aside>
 
       <main class="content">
-        <header class="topbar">
+        <header id="overview" class="topbar">
           <div>
             <p class="eyebrow">Codex workspace / overview</p>
             <h1>Usage at a glance</h1>
@@ -66,14 +66,14 @@
             <svg id="usage-chart" class="usage-chart" viewBox="0 0 760 260" role="img" aria-label="Token usage chart"></svg>
           </article>
 
-          <article class="panel account-panel">
+          <article id="accounts" class="panel account-panel">
             <div class="panel-heading"><div><p class="eyebrow">Usage sources</p><h2>Connection status</h2></div><button class="icon-button" title="Refresh usage source" id="refresh-usage">R</button></div>
             <div id="account-list" class="account-list"></div>
           </article>
         </section>
 
         <section class="lower-grid">
-          <article class="panel repo-panel">
+          <article id="repositories" class="panel repo-panel">
             <div class="panel-heading"><div><p class="eyebrow">Repository hygiene</p><h2 id="repo-title">No repository selected</h2></div><span id="repo-status" class="pill pill-muted">Waiting</span></div>
             <div id="repo-summary" class="repo-summary"><span>Branches</span><strong>--</strong><span>Worktrees</span><strong>--</strong><span>Safe candidates</span><strong>--</strong></div>
             <div class="table-wrap"><table><thead><tr><th>Branch</th><th>Age</th><th>State</th><th>Action</th></tr></thead><tbody id="branch-table"><tr><td colspan="4" class="empty-state">Choose a repository to scan.</td></tr></tbody></table></div>
@@ -83,6 +83,7 @@
           <article class="panel state-panel">
             <div class="panel-heading"><div><p class="eyebrow">Local Codex state</p><h2>Storage snapshot</h2></div><button id="scan-codex" class="button button-quiet">Scan now</button></div>
             <div id="state-list" class="state-list"><div class="empty-state">No local scan yet.</div></div>
+            <div id="local-sessions" class="session-block"><div class="panel-heading compact"><div><p class="eyebrow">Local session cleanup</p><h2>Session files</h2></div><button id="refresh-sessions" class="button button-quiet">Refresh</button></div><div id="session-list" class="session-list"><div class="empty-state">Scan local Codex state to review session files.</div></div><div class="session-recovery"><p class="eyebrow">Quarantine recovery</p><div id="session-recovery-list" class="session-list"><div class="empty-state">No quarantined sessions are available to restore.</div></div></div></div>
             <div class="github-block"><div class="panel-heading compact"><div><p class="eyebrow">Repository access</p><h2>GitHub profiles</h2></div><button id="refresh-profiles" class="button button-quiet">Refresh</button></div><div id="github-profiles" class="github-profiles"><div class="empty-state">Refresh to check public profile access.</div></div></div>
           </article>
         </section>

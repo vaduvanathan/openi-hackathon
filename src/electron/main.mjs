@@ -2,13 +2,17 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, listLocalBranchRecoveryManifests, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
+import { appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, listCodexSessionCandidates, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, quarantineCodexSession, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
 
 function recoveryManifestDirectory() {
   return path.join(app.getPath("userData"), "recovery-manifests");
+}
+
+function quarantineDirectory() {
+  return path.join(app.getPath("userData"), "quarantine");
 }
 
 function createWindow() {
@@ -69,7 +73,47 @@ ipcMain.handle("repository:restore-local-branch", async (event, manifestId) => {
     auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
   });
 });
-ipcMain.handle("codex:scan", (_event, codexHome) => scanCodexState(codexHome));
+ipcMain.handle("codex:scan", () => scanCodexState());
+ipcMain.handle("codex:session-candidates", () => listCodexSessionCandidates());
+ipcMain.handle("codex:quarantine-session", async (event, candidate) => {
+  const candidates = await listCodexSessionCandidates();
+  const freshCandidate = candidates.find((item) => item.category === candidate?.category && item.relativePath === candidate?.relativePath);
+  if (!freshCandidate) throw new Error("The selected session file is no longer available for cleanup.");
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Quarantine session"],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "The app will move this one local session file into its private quarantine folder. It will not inspect the file contents, delete server-side history, or remove any credentials.",
+    message: `Quarantine ${freshCandidate.relativePath}?`,
+    type: "warning",
+  });
+  if (confirmation.response !== 1) return { cancelled: true, quarantined: false };
+  return quarantineCodexSession(undefined, freshCandidate, {
+    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+    manifestDirectory: recoveryManifestDirectory(),
+    quarantineDirectory: quarantineDirectory(),
+  });
+});
+ipcMain.handle("codex:quarantine-manifests", () => listQuarantinedCodexSessions(recoveryManifestDirectory()));
+ipcMain.handle("codex:restore-session", async (event, manifestId) => {
+  const manifests = await listQuarantinedCodexSessions(recoveryManifestDirectory());
+  const manifest = manifests.find((item) => item.id === manifestId);
+  if (!manifest || manifest.status !== "quarantined") throw new Error("Session quarantine is not available for restore.");
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Restore session"],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "The app will move the selected local session file back to its recorded Codex location. It will not overwrite an existing file.",
+    message: `Restore ${manifest.relativePath}?`,
+    type: "question",
+  });
+  if (confirmation.response !== 1) return { cancelled: true, restored: false };
+  return restoreQuarantinedCodexSession(recoveryManifestDirectory(), quarantineDirectory(), manifestId, {
+    auditPath: path.join(app.getPath("userData"), "audit", "events.jsonl"),
+  });
+});
 ipcMain.handle("usage:demo", () => getDemoUsage());
 ipcMain.handle("openai:usage-status", () => getOpenAIUsageStatus());
 ipcMain.handle("openai:usage", (_event, options) => fetchOpenAIUsage(options));

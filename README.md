@@ -7,4 +7,4 @@ Codex Session Guard helps developers safely switch Codex contexts by making loca
 
 ## Current Build Direction
 
-The first build focuses on local core logic: repository branches, Codex worktrees, local Codex state, safe cleanup recommendations, and audit reports. The Electron UI and account connectors will be added after the local scanner is reliable.
+The current Windows Electron build scans local Codex state, identifies safe local branch cleanup candidates, supports reversible branch and session quarantine recovery, exports sanitized handoff reports, and labels OpenAI API Platform usage separately from ChatGPT or Codex subscription quota.

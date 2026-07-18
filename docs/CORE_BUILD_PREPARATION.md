@@ -13,6 +13,7 @@ The first batch does not include password storage, Bun or Node environment readi
 - Electron main-process IPC for safe renderer access.
 - A local audit log for scans and approved actions.
 - A recovery manifest for every approved local branch deletion, with a no-overwrite restore path.
+- A metadata-only local session quarantine with a no-overwrite restore path.
 - A sanitized, user-selected Markdown handoff export with no transcript or credential content.
 
 ## External APIs
@@ -68,5 +69,6 @@ The scanner should return structured records for:
 - Never open or export `auth.json`.
 - Do not scan arbitrary device contents from the renderer.
 - Do not delete branches or files automatically.
+- Quarantine only a freshly listed local session file after native confirmation.
 - Never treat a branch as removable while checked out in a worktree.
 - Keep remote deletion behind a future explicit confirmation.
