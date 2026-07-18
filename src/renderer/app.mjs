@@ -996,6 +996,11 @@ function closeTransferReadyDialog() {
   $("#transfer-ready-dialog").close();
 }
 
+async function openCodexCloudFromTransfer() {
+  closeTransferReadyDialog();
+  await openChatGpt();
+}
+
 async function quarantineSelectedSessions() {
   if (!state.selectedSessions.size || !window.codexGuard?.quarantineCodexSessions) return showToast("Select local session files first.");
   try {
@@ -1146,6 +1151,7 @@ $("#cancel-handoff-bottom").addEventListener("click", closeHandoffDialog);
 $("#handoff-dialog").addEventListener("close", () => $("#handoff-form").reset());
 $("#close-transfer-ready").addEventListener("click", closeTransferReadyDialog);
 $("#close-transfer-ready-bottom").addEventListener("click", closeTransferReadyDialog);
+$("#open-transfer-codex").addEventListener("click", openCodexCloudFromTransfer);
 $("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
 $("#refresh-audit").addEventListener("click", loadAuditEvents);
 $("#export-audit").addEventListener("click", exportAudit);

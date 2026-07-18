@@ -127,8 +127,8 @@
             <textarea id="handoff-state" class="text-input" maxlength="3000" placeholder="What is complete, in progress, or blocked?"></textarea>
             <label class="field-label" for="handoff-next">Next steps</label>
             <textarea id="handoff-next" class="text-input" maxlength="3000" placeholder="What should happen next?"></textarea>
-            <label class="check-row"><input id="handoff-open-chatgpt" type="checkbox" checked />Copy a context prompt and open Codex Cloud after saving</label>
-            <p class="dialog-note">Managex saves the Markdown document on this device first. It then copies a prompt with the file location and sanitized context, opens Codex Cloud, and leaves you to paste it into the task you choose.</p>
+            <label class="check-row"><input id="handoff-open-chatgpt" type="checkbox" checked />Copy a context prompt and prepare Codex Cloud after saving</label>
+            <p class="dialog-note">Managex saves the Markdown document on this device first, then copies a prompt with the file location and sanitized context. It will show the paste instructions before opening Codex Cloud.</p>
             <div class="dialog-actions"><button id="cancel-handoff-bottom" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Create handoff</button></div>
           </form>
         </dialog>
@@ -136,7 +136,7 @@
           <div class="dialog-heading"><div><p class="eyebrow">Context copied</p><h2 id="transfer-ready-title">Paste into Codex Cloud</h2></div><button id="close-transfer-ready" class="icon-button" type="button" title="Close">X</button></div>
           <p id="transfer-ready-file" class="transfer-ready-file"></p>
           <p class="dialog-note">The context prompt is on your clipboard. In Codex Cloud, choose the task that should receive it, press <kbd>Ctrl</kbd> + <kbd>V</kbd>, then press <kbd>Enter</kbd>.</p>
-          <div class="dialog-actions"><button id="close-transfer-ready-bottom" class="button button-primary" type="button">Continue</button></div>
+          <div class="dialog-actions"><button id="close-transfer-ready-bottom" class="button button-quiet" type="button">Cancel</button><button id="open-transfer-codex" class="button button-primary" type="button">Open Codex Cloud</button></div>
         </dialog>
         <dialog id="api-source-dialog" class="app-dialog" aria-labelledby="api-source-title">
           <form id="api-source-form" method="dialog">

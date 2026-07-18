@@ -63,7 +63,6 @@ function createCodexContextPrompt({ handoff, filePath, intent = "transfer" }) {
 
 async function prepareCodexContext({ handoff, filePath, intent }) {
   clipboard.writeText(createCodexContextPrompt({ handoff, filePath, intent }));
-  await shell.openExternal("https://chatgpt.com/codex/cloud");
 }
 
 async function readSavedHandoff(fileName) {
