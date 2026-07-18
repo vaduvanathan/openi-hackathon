@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createCleanupPlan, getDemoUsage, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
+import { createCleanupPlan, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -30,6 +30,8 @@ ipcMain.handle("repository:cleanup-plan", async (_event, repoPath, options) => {
 });
 ipcMain.handle("codex:scan", (_event, codexHome) => scanCodexState(codexHome));
 ipcMain.handle("usage:demo", () => getDemoUsage());
+ipcMain.handle("openai:usage-status", () => getOpenAIUsageStatus());
+ipcMain.handle("openai:usage", (_event, options) => fetchOpenAIUsage(options));
 ipcMain.handle("github:profiles", (_event, logins) => scanGitHubProfiles(logins));
 
 app.whenReady().then(() => {

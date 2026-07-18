@@ -46,6 +46,7 @@ h2 { font-size: 15px; margin-bottom: 0; letter-spacing: .01em; }
 .demo-badge, .pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; padding: 7px 10px; white-space: nowrap; }
 .button { border: 1px solid var(--line); border-radius: 6px; padding: 9px 13px; color: var(--text); background: var(--panel-soft); font-size: 12px; }
 .button:hover { border-color: #4b5a68; background: #252d37; }
+.button:disabled { cursor: not-allowed; opacity: .55; }
 .button-primary { border-color: var(--cyan); background: var(--cyan); color: #0b1a1d; font-weight: 700; }
 .button-primary:hover { background: #6ae3e6; border-color: #6ae3e6; }
 .button-quiet { padding: 7px 10px; background: transparent; }

@@ -23,9 +23,9 @@ export function getDemoUsage() {
     accounts: [
       {
         id: "hackathon",
-        name: "Hackathon",
-        kind: "Codex / ChatGPT",
-        status: "Connected",
+        name: "Demo workspace A",
+        kind: "Illustrative sample",
+        status: "Demo",
         usagePercent: 68,
         reset: "14h 22m",
         tokens: 7_800_000,
@@ -34,9 +34,9 @@ export function getDemoUsage() {
       },
       {
         id: "personal",
-        name: "Personal",
-        kind: "Codex / ChatGPT",
-        status: "Connected",
+        name: "Demo workspace B",
+        kind: "Illustrative sample",
+        status: "Demo",
         usagePercent: 24,
         reset: "2d 04h",
         tokens: 2_100_000,
@@ -45,9 +45,9 @@ export function getDemoUsage() {
       },
       {
         id: "work",
-        name: "Work",
-        kind: "Codex / ChatGPT",
-        status: "Needs sync",
+        name: "Demo workspace C",
+        kind: "Illustrative sample",
+        status: "Demo",
         usagePercent: 83,
         reset: "6h 08m",
         tokens: 9_400_000,

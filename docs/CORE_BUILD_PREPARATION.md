@@ -14,7 +14,7 @@ The first batch does not include password storage, Bun or Node environment readi
 - A local audit log for scans and approved actions.
 - A recovery manifest before any future branch or file deletion.
 
-## External APIs To Add Later
+## External APIs
 
 ### GitHub
 
@@ -39,12 +39,14 @@ These calls require the user to connect each account and may return only the fie
 
 ### OpenAI Platform Usage
 
-For organizations using the API Platform, add an Admin API connector for:
+The current connector reads API Platform organization data only when the Electron process receives an `OPENAI_ADMIN_KEY` environment variable. It never displays or persists the key. It reads:
 
 - `/organization/usage/completions`
 - `/organization/costs`
 
 This is separate from ChatGPT/Codex plan usage and should be labeled separately in the product.
+
+Personal ChatGPT or Codex subscription quota, credit balance, and server-side task history are not represented by this connector.
 
 ## Core Data Contracts
 

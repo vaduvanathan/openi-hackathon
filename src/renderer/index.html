@@ -36,20 +36,21 @@
             <p class="subhead">See account activity, local state, and cleanup candidates in one view.</p>
           </div>
           <div class="top-actions">
-            <span class="demo-badge"><span class="status-dot"></span>Demo telemetry</span>
+            <span id="data-source-badge" class="demo-badge"><span class="status-dot"></span>No live source</span>
+            <button id="load-live-usage" class="button button-quiet">API key needed</button>
             <button id="scan-repository" class="button button-primary">Scan repository</button>
           </div>
         </header>
 
         <section class="alert-strip">
           <div class="alert-symbol">i</div>
-          <div><strong>Usage data is currently simulated.</strong><span>Connect account sources later to replace this sample stream with live metrics.</span></div>
-          <button id="refresh-profiles" class="button button-quiet">Refresh GitHub profiles</button>
+          <div><strong id="usage-notice-title">No live OpenAI API source is connected.</strong><span id="usage-notice-body">Set OPENAI_ADMIN_KEY before launching the app to load organization API usage and costs.</span></div>
+          <button id="load-demo-usage" class="button button-quiet">View demo</button>
         </section>
 
         <section class="metric-grid" aria-label="Workspace metrics">
-          <article class="metric-card metric-cyan"><span>Total tokens</span><strong id="metric-tokens">17.9M</strong><small>Across demo accounts</small></article>
-          <article class="metric-card metric-violet"><span>Connected accounts</span><strong id="metric-accounts">3</strong><small>One needs sync</small></article>
+          <article class="metric-card metric-cyan"><span>Total tokens</span><strong id="metric-tokens">--</strong><small id="metric-tokens-detail">Load an API source</small></article>
+          <article class="metric-card metric-violet"><span>Live sources</span><strong id="metric-accounts">0</strong><small id="metric-accounts-detail">No live sources</small></article>
           <article class="metric-card metric-amber"><span>Cleanup candidates</span><strong id="metric-candidates">--</strong><small>Scan a repository</small></article>
           <article class="metric-card metric-green"><span>Local state</span><strong id="metric-state">Not scanned</strong><small id="metric-state-detail">Codex home</small></article>
         </section>
@@ -58,14 +59,14 @@
           <article class="panel chart-panel">
             <div class="panel-heading">
               <div><p class="eyebrow">Token activity</p><h2>Usage over time</h2></div>
-              <div class="chart-controls"><select id="account-filter" aria-label="Filter usage by account"><option value="all">All accounts</option><option value="hackathon">Hackathon</option><option value="personal">Personal</option><option value="work">Work</option></select><button class="range-button active" data-days="14">14d</button><button class="range-button" data-days="7">7d</button></div>
+              <div class="chart-controls"><button class="range-button active" data-days="14">14d</button><button class="range-button" data-days="7">7d</button></div>
             </div>
             <div class="chart-legend"><span><i class="legend-dot dot-cyan"></i>Total tokens</span><span><i class="legend-dot dot-violet"></i>Output tokens</span></div>
             <svg id="usage-chart" class="usage-chart" viewBox="0 0 760 260" role="img" aria-label="Token usage chart"></svg>
           </article>
 
           <article class="panel account-panel">
-            <div class="panel-heading"><div><p class="eyebrow">Connected sources</p><h2>Account health</h2></div><button class="icon-button" title="Refresh demo usage" id="refresh-usage">R</button></div>
+            <div class="panel-heading"><div><p class="eyebrow">Usage sources</p><h2>Connection status</h2></div><button class="icon-button" title="Refresh usage source" id="refresh-usage">R</button></div>
             <div id="account-list" class="account-list"></div>
           </article>
         </section>
@@ -80,7 +81,7 @@
           <article class="panel state-panel">
             <div class="panel-heading"><div><p class="eyebrow">Local Codex state</p><h2>Storage snapshot</h2></div><button id="scan-codex" class="button button-quiet">Scan now</button></div>
             <div id="state-list" class="state-list"><div class="empty-state">No local scan yet.</div></div>
-            <div class="github-block"><div class="panel-heading compact"><div><p class="eyebrow">Repository access</p><h2>GitHub profiles</h2></div></div><div id="github-profiles" class="github-profiles"><div class="empty-state">Refresh to check public profile access.</div></div></div>
+            <div class="github-block"><div class="panel-heading compact"><div><p class="eyebrow">Repository access</p><h2>GitHub profiles</h2></div><button id="refresh-profiles" class="button button-quiet">Refresh</button></div><div id="github-profiles" class="github-profiles"><div class="empty-state">Refresh to check public profile access.</div></div></div>
           </article>
         </section>
         <div id="toast" class="toast" role="status"></div>
