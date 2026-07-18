@@ -1,8 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getDemoUsage, getOpenAIUsageStatus, listCodexSessionCandidates, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, quarantineCodexSession, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
+import { appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, fetchOpenAIUsage, getAccountSources, getDemoUsage, getOpenAIUsageStatus, listCodexSessionCandidates, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, quarantineCodexSession, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -117,6 +117,8 @@ ipcMain.handle("codex:restore-session", async (event, manifestId) => {
 ipcMain.handle("usage:demo", () => getDemoUsage());
 ipcMain.handle("openai:usage-status", () => getOpenAIUsageStatus());
 ipcMain.handle("openai:usage", (_event, options) => fetchOpenAIUsage(options));
+ipcMain.handle("account:sources", () => getAccountSources());
+ipcMain.handle("account:open-chatgpt", () => shell.openExternal("https://chatgpt.com/"));
 ipcMain.handle("github:profiles", (_event, logins) => scanGitHubProfiles(logins));
 ipcMain.handle("handoff:export", async (event, reportData) => {
   const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;

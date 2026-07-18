@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("codexGuard", {
   getDemoUsage: () => ipcRenderer.invoke("usage:demo"),
   getOpenAIUsageStatus: () => ipcRenderer.invoke("openai:usage-status"),
   loadOpenAIUsage: (options) => ipcRenderer.invoke("openai:usage", options),
+  getAccountSources: () => ipcRenderer.invoke("account:sources"),
+  openChatGpt: () => ipcRenderer.invoke("account:open-chatgpt"),
   scanGitHubProfiles: (logins) => ipcRenderer.invoke("github:profiles", logins),
   exportHandoff: (reportData) => ipcRenderer.invoke("handoff:export", reportData),
 });

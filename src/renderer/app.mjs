@@ -1,5 +1,5 @@
 const profiles = ["vaduvanathan", "nathan-build"];
-const state = { branchRecoveries: [], codex: null, githubProfiles: [], repository: null, sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], branchRecoveries: [], codex: null, githubProfiles: [], repository: null, sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -143,6 +143,26 @@ function renderRepository() {
   }).join("");
 }
 
+function renderAccountSources() {
+  const container = $("#source-list");
+  if (!state.accountSources.length) {
+    container.innerHTML = `<div class="empty-state">Account sources are unavailable.</div>`;
+    return;
+  }
+  container.innerHTML = state.accountSources.map((source) => {
+    const action = source.id === "chatgpt-codex"
+      ? `<button class="button button-quiet" data-open-chatgpt>Open ChatGPT</button>`
+      : source.telemetry === "available"
+        ? `<button class="button button-quiet" data-load-api-source>Load usage</button>`
+        : "";
+    return `
+      <div class="source-row">
+        <div><strong>${escapeHtml(source.label)}</strong><span>${escapeHtml(source.kind)} - ${escapeHtml(source.detail)}</span></div>
+        <div class="source-action"><span class="pill">${escapeHtml(source.status)}</span>${action}</div>
+      </div>`;
+  }).join("");
+}
+
 function renderBranchRecoveries() {
   const container = $("#recovery-list");
   const recoveries = state.branchRecoveries.filter((manifest) => manifest.status === "deleted");
@@ -205,6 +225,22 @@ async function loadUsageStatus() {
   if (!window.codexGuard?.getOpenAIUsageStatus) return;
   state.usageStatus = await window.codexGuard.getOpenAIUsageStatus();
   renderUsage();
+}
+
+async function loadAccountSources() {
+  if (!window.codexGuard?.getAccountSources) return;
+  state.accountSources = await window.codexGuard.getAccountSources();
+  renderAccountSources();
+}
+
+async function openChatGpt() {
+  if (!window.codexGuard?.openChatGpt) return showToast("Electron bridge is not available.");
+  try {
+    await window.codexGuard.openChatGpt();
+    showToast("Opened ChatGPT in your default browser.");
+  } catch {
+    showToast("Could not open ChatGPT in your default browser.");
+  }
 }
 
 async function loadLiveUsage() {
@@ -377,6 +413,10 @@ document.querySelectorAll(".range-button").forEach((button) => button.addEventLi
 $("#load-live-usage").addEventListener("click", loadLiveUsage);
 $("#load-demo-usage").addEventListener("click", loadDemoUsage);
 $("#refresh-usage").addEventListener("click", () => state.usage?.source === "demo" ? loadDemoUsage() : loadLiveUsage());
+$("#source-list").addEventListener("click", (event) => {
+  if (event.target.closest("[data-open-chatgpt]")) openChatGpt();
+  if (event.target.closest("[data-load-api-source]")) loadLiveUsage();
+});
 $("#scan-repository").addEventListener("click", scanRepository);
 $("#scan-codex").addEventListener("click", scanCodex);
 $("#refresh-sessions").addEventListener("click", () => refreshSessionCleanup().catch(() => showToast("Could not refresh local session cleanup.")));
@@ -402,6 +442,7 @@ $("#session-recovery-list").addEventListener("click", (event) => {
 
 renderUsage();
 await loadUsageStatus();
+await loadAccountSources();
 await loadGitHubProfiles();
 await loadBranchRecoveries();
 await loadSessionRecoveries();

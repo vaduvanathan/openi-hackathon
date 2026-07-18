@@ -31,13 +31,7 @@ Remote branch deletion is a later, separately confirmed action.
 
 ### Codex / ChatGPT Account Data
 
-Use the supported Codex account service when available:
-
-- `account/read`
-- `account/rateLimits/read`
-- `account/usage/read`
-
-These calls require the user to connect each account and may return only the fields supported for that account.
+The MVP does not read personal ChatGPT or Codex plan telemetry, chat history, credits, or quota through an undocumented endpoint. It opens ChatGPT in the user's normal browser, where the user can review information available to that signed-in account.
 
 ### OpenAI Platform Usage
 
