@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createCleanupPlan, scanCodexState, scanRepository } from "../core/index.mjs";
+import { createCleanupPlan, getDemoUsage, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -20,11 +20,17 @@ function createWindow() {
 }
 
 ipcMain.handle("repository:scan", (_event, repoPath, options) => scanRepository(repoPath, options));
+ipcMain.handle("repository:choose", async () => {
+  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+  return result.canceled ? null : result.filePaths[0];
+});
 ipcMain.handle("repository:cleanup-plan", async (_event, repoPath, options) => {
   const scan = await scanRepository(repoPath, options);
   return createCleanupPlan(scan, options);
 });
 ipcMain.handle("codex:scan", (_event, codexHome) => scanCodexState(codexHome));
+ipcMain.handle("usage:demo", () => getDemoUsage());
+ipcMain.handle("github:profiles", (_event, logins) => scanGitHubProfiles(logins));
 
 app.whenReady().then(() => {
   createWindow();
