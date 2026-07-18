@@ -1,4 +1,4 @@
-const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubMode: "live", githubPresentation: null, githubProfiles: [], githubRepositories: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubMode: "live", githubPresentation: null, githubProfiles: [], githubRepositories: [], handoffs: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionInspections: new Map(), sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -244,10 +244,12 @@ function renderSessionCleanup() {
     const visibleCandidates = state.sessionCandidates.slice(0, 12);
     candidateContainer.innerHTML = visibleCandidates.map((candidate) => {
       const key = `${candidate.category}:${candidate.relativePath}`;
+      const inspection = state.sessionInspections.get(key);
       return `
       <div class="session-row">
         <div><strong>${escapeHtml(candidate.relativePath)}</strong><span>${escapeHtml(candidate.category)} - ${candidate.ageDays}d old - ${formatBytes(candidate.size)}</span></div>
-        <label class="row-choice"><input type="checkbox" data-select-session-category="${escapeHtml(candidate.category)}" data-select-session-path="${escapeHtml(candidate.relativePath)}" ${state.selectedSessions.has(key) ? "checked" : ""} aria-label="Select ${escapeHtml(candidate.relativePath)}" /><span>Select</span></label>
+        <div class="session-actions"><button class="button button-quiet table-action" data-inspect-session-category="${escapeHtml(candidate.category)}" data-inspect-session-path="${escapeHtml(candidate.relativePath)}">${inspection ? "Hide details" : "Inspect"}</button><label class="row-choice"><input type="checkbox" data-select-session-category="${escapeHtml(candidate.category)}" data-select-session-path="${escapeHtml(candidate.relativePath)}" ${state.selectedSessions.has(key) ? "checked" : ""} aria-label="Select ${escapeHtml(candidate.relativePath)}" /><span>Select</span></label></div>
+        ${inspection ? renderSessionInspection(inspection) : ""}
       </div>`;
     }).join("") + (state.sessionCandidates.length > visibleCandidates.length ? `<p class="list-note">Showing the 12 oldest of ${state.sessionCandidates.length} local session files.</p>` : "");
   }
@@ -265,6 +267,28 @@ function renderSessionCleanup() {
       <div><strong>${escapeHtml(manifest.relativePath)}</strong><span>${escapeHtml(manifest.category)} - quarantined ${escapeHtml(formatTimestamp(manifest.quarantinedAt || manifest.createdAt))}</span></div>
       <button class="button button-quiet" data-restore-session="${escapeHtml(manifest.id)}">Restore</button>
     </div>`).join("");
+}
+
+function renderSessionInspection(inspection) {
+  if (!inspection.repository) {
+    return `<div class="session-inspection"><span>No Git repository was found from this session's workspace metadata. Session content is not displayed.</span></div>`;
+  }
+  const branches = inspection.repository.safeBranches || [];
+  const branchMarkup = branches.length
+    ? branches.map((branch) => `<div class="session-branch"><span>${escapeHtml(branch.name)} - ${branch.inactiveDays}d old</span><button class="button button-danger table-action" data-delete-session-branch="${escapeHtml(branch.name)}" data-session-repository="${escapeHtml(inspection.repository.path)}" data-session-base="${escapeHtml(inspection.scan.baseBranch)}" data-session-stale="${inspection.scan.staleAfterDays}">Delete local</button></div>`).join("")
+    : `<span>No merged, stale local branches are eligible for deletion in this repository.</span>`;
+  const project = inspection.repository.path.split(/[\\/]/).pop() || inspection.repository.path;
+  return `<div class="session-inspection"><div><strong>${escapeHtml(project)}</strong><span>Workspace: ${escapeHtml(inspection.workspace)} - current branch: ${escapeHtml(inspection.repository.currentBranch || "detached")}</span></div><div class="session-branch-list">${branchMarkup}</div></div>`;
+}
+
+function renderHandoffs() {
+  const container = $("#handoff-list");
+  if (!container) return;
+  if (!state.handoffs.length) {
+    container.innerHTML = `<div class="empty-state">Create a handoff to save a sanitized context package here automatically.</div>`;
+    return;
+  }
+  container.innerHTML = state.handoffs.slice(0, 5).map((handoff) => `<div class="audit-row"><div><strong>${escapeHtml(handoff.fileName)}</strong><span>${formatBytes(handoff.size)}</span></div><time>${escapeHtml(formatTimestamp(handoff.createdAt))}</time></div>`).join("");
 }
 
 function describeAuditEvent(event) {
@@ -590,9 +614,48 @@ async function loadSessionRecoveries() {
 async function refreshCodexAfterSessionChange() {
   state.codex = await window.codexGuard.scanCodexState();
   state.selectedSessions.clear();
+  state.sessionInspections.clear();
   renderCodexState();
   await refreshSessionCleanup();
   await loadAuditEvents();
+}
+
+async function inspectCodexSession(candidate) {
+  if (!window.codexGuard?.inspectCodexSession) return showToast("Electron bridge is not available.");
+  const key = `${candidate.category}:${candidate.relativePath}`;
+  if (state.sessionInspections.has(key)) {
+    state.sessionInspections.delete(key);
+    renderSessionCleanup();
+    return;
+  }
+  try {
+    state.sessionInspections.set(key, await window.codexGuard.inspectCodexSession(candidate));
+    renderSessionCleanup();
+  } catch {
+    showToast("Could not inspect that local session's workspace metadata.");
+  }
+}
+
+async function deleteSessionInspectionBranch(repositoryPath, branchName, baseBranch, staleAfterDays) {
+  if (!window.codexGuard?.deleteLocalBranch) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.deleteLocalBranch(repositoryPath, branchName, { baseBranch, staleAfterDays: Number(staleAfterDays) });
+    if (result.cancelled) return showToast("Local branch deletion cancelled.");
+    for (const [key, inspection] of state.sessionInspections) {
+      if (inspection.repository?.path === repositoryPath) {
+        state.sessionInspections.set(key, {
+          ...inspection,
+          repository: { ...inspection.repository, safeBranches: result.scan.branches.filter((branch) => branch.safeLocalDelete) },
+          scan: result.scan,
+        });
+      }
+    }
+    await Promise.all([loadBranchRecoveries(), loadAuditEvents()]);
+    renderSessionCleanup();
+    showToast(`Deleted local branch ${result.branch}.`);
+  } catch {
+    showToast("That branch is no longer safe to delete.");
+  }
 }
 
 async function quarantineCodexSession(category, relativePath) {
@@ -708,9 +771,25 @@ async function exportHandoff() {
       repository: state.repository,
       usage: state.usage,
     });
-    showToast(`Created ${result.fileName}.`);
+    await Promise.all([loadHandoffs(), loadAuditEvents()]);
+    showToast(`Created ${result.fileName}. Open Handoffs to view it.`);
   } catch {
     showToast("Could not export the handoff report.");
+  }
+}
+
+async function loadHandoffs() {
+  if (!window.codexGuard?.listHandoffs) return;
+  state.handoffs = await window.codexGuard.listHandoffs();
+  renderHandoffs();
+}
+
+async function openHandoffDirectory() {
+  if (!window.codexGuard?.openHandoffDirectory) return showToast("Electron bridge is not available.");
+  try {
+    await window.codexGuard.openHandoffDirectory();
+  } catch {
+    showToast("Could not open the handoffs folder.");
   }
 }
 
@@ -849,6 +928,7 @@ $("#cancel-github-profile-bottom").addEventListener("click", closeGitHubProfileD
 $("#github-profile-dialog").addEventListener("close", () => $("#github-profile-form").reset());
 $("#export-handoff").addEventListener("click", exportHandoff);
 $("#import-handoff").addEventListener("click", importHandoff);
+$("#open-handoff-directory").addEventListener("click", openHandoffDirectory);
 $("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
 $("#refresh-audit").addEventListener("click", loadAuditEvents);
 $("#export-audit").addEventListener("click", exportAudit);
@@ -878,6 +958,10 @@ $("#recovery-list").addEventListener("click", (event) => {
 $("#session-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-quarantine-category]");
   if (button) quarantineCodexSession(button.dataset.quarantineCategory, button.dataset.quarantinePath);
+  const inspectButton = event.target.closest("[data-inspect-session-category]");
+  if (inspectButton) inspectCodexSession({ category: inspectButton.dataset.inspectSessionCategory, relativePath: inspectButton.dataset.inspectSessionPath });
+  const deleteButton = event.target.closest("[data-delete-session-branch]");
+  if (deleteButton) deleteSessionInspectionBranch(deleteButton.dataset.sessionRepository, deleteButton.dataset.deleteSessionBranch, deleteButton.dataset.sessionBase, deleteButton.dataset.sessionStale);
 });
 $("#session-list").addEventListener("change", (event) => {
   const input = event.target.closest("[data-select-session-category]");
@@ -905,3 +989,4 @@ await loadBranchRecoveries();
 await loadSessionRecoveries();
 await loadAuditEvents();
 await loadDesktopClients();
+await loadHandoffs();
