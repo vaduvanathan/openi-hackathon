@@ -38,6 +38,7 @@
           <div class="top-actions">
             <span id="data-source-badge" class="demo-badge"><span class="status-dot"></span>No live source</span>
             <button id="load-live-usage" class="button button-quiet">API key needed</button>
+            <button id="run-demo-event" class="button button-quiet">Create API event</button>
             <button id="import-handoff" class="button button-quiet">Import handoff</button>
             <button id="export-handoff" class="button button-quiet">Create handoff</button>
             <button id="scan-repository" class="button button-primary">Scan repository</button>
@@ -71,6 +72,7 @@
             <div class="panel-heading"><div><p class="eyebrow">Usage sources</p><h2>Connection status</h2></div><button class="icon-button" title="Refresh usage source" id="refresh-usage">R</button></div>
             <div id="account-list" class="account-list"></div>
             <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Account access</p><h2>Connected sources</h2></div><button id="add-api-source" class="button button-quiet">Add API source</button></div><div id="source-list" class="source-list"><div class="empty-state">Loading account sources.</div></div></div>
+            <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Live demo event</p><h2>Generate API activity</h2></div></div><div id="demo-api-event" class="source-list"><div class="empty-state">Checking demo API event setup.</div></div></div>
           </article>
         </section>
 
@@ -105,6 +107,19 @@
             <input id="api-source-key" class="text-input" name="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-admin-..." required />
             <p class="dialog-note">The key is encrypted with Windows-protected storage and is never displayed, exported, or committed.</p>
             <div class="dialog-actions"><button id="cancel-api-source-bottom" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Save encrypted source</button></div>
+          </form>
+        </dialog>
+        <dialog id="demo-api-dialog" class="app-dialog" aria-labelledby="demo-api-title">
+          <form id="demo-api-form" method="dialog">
+            <div class="dialog-heading"><div><p class="eyebrow">Live demo activity</p><h2 id="demo-api-title">Connect project API key</h2></div><button id="cancel-demo-api" class="icon-button" type="button" title="Close">X</button></div>
+            <label class="field-label" for="demo-api-label">Project name</label>
+            <input id="demo-api-label" class="text-input" name="label" maxlength="48" value="Hackathon demo project" required />
+            <label class="field-label" for="demo-api-model">Model</label>
+            <input id="demo-api-model" class="text-input" name="model" maxlength="80" value="gpt-5-mini" required />
+            <label class="field-label" for="demo-api-key">Project API key</label>
+            <input id="demo-api-key" class="text-input" name="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-proj-..." required />
+            <p class="dialog-note">Use a Project API key, not an organization Admin key. It is encrypted with Windows-protected storage, never displayed or exported, and only used after a native confirmation. The demo sends one short request with an 8-token output cap.</p>
+            <div class="dialog-actions"><button id="cancel-demo-api-bottom" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Save demo key</button></div>
           </form>
         </dialog>
         <dialog id="github-profile-dialog" class="app-dialog" aria-labelledby="github-profile-title">

@@ -2,6 +2,8 @@ export { scanRepository } from "./git-scanner.mjs";
 export { scanCodexState } from "./codex-state.mjs";
 export { getAccountSources } from "./account-sources.mjs";
 export { addApiSource, getEncryptedApiSource, listApiSources, removeApiSource } from "./api-source-store.mjs";
+export { clearDemoApiKey, getDemoApiKeyStatus, getEncryptedDemoApiKey, recordDemoApiEvent, saveDemoApiKey } from "./demo-api-key-store.mjs";
+export { createDemoApiEvent } from "./demo-api-request.mjs";
 export { listCodexSessionCandidates, listQuarantinedCodexSessions, quarantineCodexSession, quarantineCodexSessions, restoreQuarantinedCodexSession } from "./codex-quarantine.mjs";
 export { inspectCodexSession } from "./codex-session-inspector.mjs";
 export { appendAuditEvent, listAuditEvents } from "./audit.mjs";

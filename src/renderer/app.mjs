@@ -1,4 +1,4 @@
-const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubMode: "live", githubPresentation: null, githubProfiles: [], githubRepositories: [], handoffs: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionInspections: new Map(), sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, demoApi: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubMode: "live", githubPresentation: null, githubProfiles: [], githubRepositories: [], handoffs: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionInspections: new Map(), sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -183,6 +183,21 @@ function renderAccountSources() {
   }).join("");
 }
 
+function renderDemoApiEvent() {
+  const container = $("#demo-api-event");
+  if (!container) return;
+  const status = state.demoApi;
+  if (!status?.configured) {
+    container.innerHTML = `<div class="source-row"><div><strong>Project API key not connected</strong><span>Connect one encrypted project key to create a real, small API event for this demo.</span></div><div class="source-action"><span class="pill">Setup</span><button class="button button-quiet" data-connect-demo-api>Connect key</button></div></div>`;
+    return;
+  }
+  const event = status.lastEvent;
+  const detail = event
+    ? `${formatTokens(event.totalTokens)} total tokens on ${event.model} at ${formatTimestamp(event.completedAt)}.`
+    : `Ready to send one capped request with ${status.model}.`;
+  container.innerHTML = `<div class="source-row"><div><strong>${escapeHtml(status.label)}</strong><span>${escapeHtml(detail)} Organization usage can take a few minutes to aggregate.</span></div><div class="source-action"><span class="pill">${event ? "Recorded" : "Ready"}</span><button class="button button-quiet" data-run-demo-api>Run event</button><button class="button button-danger table-action" data-clear-demo-api>Remove</button></div></div>`;
+}
+
 function renderBranchRecoveries() {
   const container = $("#recovery-list");
   const recoveries = state.branchRecoveries.filter((manifest) => manifest.status === "deleted");
@@ -348,6 +363,12 @@ async function loadAccountSources() {
   renderAccountSources();
 }
 
+async function loadDemoApiStatus() {
+  if (!window.codexGuard?.getDemoApiStatus) return;
+  state.demoApi = await window.codexGuard.getDemoApiStatus();
+  renderDemoApiEvent();
+}
+
 function openApiSourceDialog() {
   if (!state.accountStorage?.available) return showToast("Windows-protected storage is unavailable on this device.");
   const dialog = $("#api-source-dialog");
@@ -358,6 +379,65 @@ function openApiSourceDialog() {
 function closeApiSourceDialog() {
   $("#api-source-form").reset();
   $("#api-source-dialog").close();
+}
+
+function openDemoApiDialog() {
+  if (!state.accountStorage?.available) return showToast("Windows-protected storage is unavailable on this device.");
+  const dialog = $("#demo-api-dialog");
+  if (!dialog.open) dialog.showModal();
+  $("#demo-api-key").focus();
+}
+
+function closeDemoApiDialog() {
+  $("#demo-api-form").reset();
+  $("#demo-api-dialog").close();
+}
+
+async function saveDemoApiKey(event) {
+  event.preventDefault();
+  if (!window.codexGuard?.saveDemoApiKey) return showToast("Electron bridge is not available.");
+  const keyField = $("#demo-api-key");
+  const source = { apiKey: keyField.value, label: $("#demo-api-label").value, model: $("#demo-api-model").value };
+  keyField.value = "";
+  try {
+    state.demoApi = await window.codexGuard.saveDemoApiKey(source);
+    closeDemoApiDialog();
+    renderDemoApiEvent();
+    await loadAuditEvents();
+    showToast("Project API key saved. Run event when you are ready to create live usage.");
+  } catch (error) {
+    showToast(error?.message || "Could not save that project API key.");
+  }
+}
+
+async function runDemoApiEvent() {
+  if (!state.demoApi?.configured) return openDemoApiDialog();
+  if (!window.codexGuard?.runDemoApiEvent) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.runDemoApiEvent();
+    if (result.cancelled) return showToast("Live API event cancelled.");
+    state.demoApi = result.status;
+    renderDemoApiEvent();
+    await loadAuditEvents();
+    if (state.usageStatus?.configured) await loadLiveUsage();
+    showToast(`Live API event recorded: ${result.event.totalTokens} tokens on ${result.event.model}.`);
+  } catch (error) {
+    showToast(error?.message || "Could not create the live API event.");
+  }
+}
+
+async function clearDemoApiKey() {
+  if (!window.codexGuard?.clearDemoApiKey) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.clearDemoApiKey();
+    if (result.cancelled) return showToast("Project API key removal cancelled.");
+    state.demoApi = result.status;
+    renderDemoApiEvent();
+    await loadAuditEvents();
+    showToast("Demo project API key removed from this device.");
+  } catch {
+    showToast("Could not remove the demo project API key.");
+  }
 }
 
 async function addApiSource(event) {
@@ -889,6 +969,7 @@ document.querySelectorAll(".range-button").forEach((button) => button.addEventLi
   renderChart();
 }));
 $("#load-live-usage").addEventListener("click", loadLiveUsage);
+$("#run-demo-event").addEventListener("click", runDemoApiEvent);
 $("#load-demo-usage").addEventListener("click", loadDemoUsage);
 $("#refresh-usage").addEventListener("click", () => state.usage?.source === "demo" ? loadDemoUsage() : loadLiveUsage());
 $("#source-list").addEventListener("click", (event) => {
@@ -903,6 +984,15 @@ $("#api-source-form").addEventListener("submit", addApiSource);
 $("#cancel-api-source").addEventListener("click", closeApiSourceDialog);
 $("#cancel-api-source-bottom").addEventListener("click", closeApiSourceDialog);
 $("#api-source-dialog").addEventListener("close", () => $("#api-source-form").reset());
+$("#demo-api-event").addEventListener("click", (event) => {
+  if (event.target.closest("[data-connect-demo-api]")) openDemoApiDialog();
+  if (event.target.closest("[data-run-demo-api]")) runDemoApiEvent();
+  if (event.target.closest("[data-clear-demo-api]")) clearDemoApiKey();
+});
+$("#demo-api-form").addEventListener("submit", saveDemoApiKey);
+$("#cancel-demo-api").addEventListener("click", closeDemoApiDialog);
+$("#cancel-demo-api-bottom").addEventListener("click", closeDemoApiDialog);
+$("#demo-api-dialog").addEventListener("close", () => $("#demo-api-form").reset());
 $("#scan-repository").addEventListener("click", openRepositoryDialog);
 $("#scan-local-folder").addEventListener("click", scanManualRepository);
 $("#scan-local-worktrees").addEventListener("click", scanLocalAgentWorktrees);
@@ -984,6 +1074,7 @@ $("#github-profiles").addEventListener("click", (event) => {
 renderUsage();
 await loadUsageStatus();
 await loadAccountSources();
+await loadDemoApiStatus();
 await loadGitHubProfiles();
 await loadBranchRecoveries();
 await loadSessionRecoveries();

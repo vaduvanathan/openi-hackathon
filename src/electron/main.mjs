@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } fr
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { addApiSource, addGitHubProfileConnection, appendAuditEvent, checkoutGitHubCliRepository, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, discoverLocalAgentWorktrees, discoverOpenAIDesktopClients, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, getPresentationGitHubWorkspace, getPresentationRepositoryScan, inspectCodexSession, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubCliAccounts, listGitHubCliRepositories, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository, switchGitHubCliAccount } from "../core/index.mjs";
+import { addApiSource, addGitHubProfileConnection, appendAuditEvent, checkoutGitHubCliRepository, clearDemoApiKey, createCleanupPlan, createDemoApiEvent, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, discoverLocalAgentWorktrees, discoverOpenAIDesktopClients, fetchOpenAIUsage, getAccountSources, getDemoApiKeyStatus, getDemoUsage, getEncryptedApiSource, getEncryptedDemoApiKey, getOpenAIUsageStatus, getPresentationGitHubWorkspace, getPresentationRepositoryScan, inspectCodexSession, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubCliAccounts, listGitHubCliRepositories, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, recordDemoApiEvent, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, saveDemoApiKey, scanCodexState, scanGitHubProfiles, scanRepository, switchGitHubCliAccount } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -17,6 +17,10 @@ function quarantineDirectory() {
 
 function apiSourceStorePath() {
   return path.join(app.getPath("userData"), "api-sources", "sources.json");
+}
+
+function demoApiKeyStorePath() {
+  return path.join(app.getPath("userData"), "demo-api", "source.json");
 }
 
 function handoffDirectory() {
@@ -253,6 +257,51 @@ ipcMain.handle("openai:usage-status", () => openAIUsageStatus());
 ipcMain.handle("openai:usage", (_event, options) => liveOpenAIUsage(options));
 ipcMain.handle("account:sources", () => accountSources());
 ipcMain.handle("account:storage-status", () => ({ available: safeStorage.isEncryptionAvailable(), provider: "Windows-protected storage" }));
+ipcMain.handle("demo-api:status", () => getDemoApiKeyStatus(demoApiKeyStorePath()));
+ipcMain.handle("demo-api:save-key", async (_event, source) => {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error("Windows-protected storage is unavailable.");
+  if (typeof source?.apiKey !== "string" || !source.apiKey.trim().startsWith("sk-")) throw new Error("A project API key is required.");
+  const saved = await saveDemoApiKey(demoApiKeyStorePath(), {
+    encryptedKey: safeStorage.encryptString(source.apiKey.trim()).toString("base64"),
+    label: source.label,
+    model: source.model,
+  });
+  await appendAuditEvent(auditPath(), { label: saved.label, model: saved.model, type: "demo-api-key-connected" });
+  return saved;
+});
+ipcMain.handle("demo-api:clear-key", async (event) => {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Remove project key"],
+    cancelId: 0,
+    defaultId: 0,
+    detail: "The encrypted project API key will be removed from this Windows profile. This does not revoke the key at OpenAI.",
+    message: "Remove the demo project API key?",
+    type: "warning",
+  });
+  if (confirmation.response !== 1) return { cancelled: true };
+  const status = await clearDemoApiKey(demoApiKeyStorePath());
+  await appendAuditEvent(auditPath(), { type: "demo-api-key-removed" });
+  return { cancelled: false, status };
+});
+ipcMain.handle("demo-api:run", async (event) => {
+  const configured = await getEncryptedDemoApiKey(demoApiKeyStorePath());
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const confirmation = await dialog.showMessageBox(parentWindow, {
+    buttons: ["Cancel", "Run live demo event"],
+    cancelId: 0,
+    defaultId: 0,
+    detail: `This sends one short request to ${configured.model}, asks for DEMO_OK, and caps output at 8 tokens. It can incur a small API charge.`,
+    message: "Create a real OpenAI API usage event?",
+    type: "question",
+  });
+  if (confirmation.response !== 1) return { cancelled: true };
+  const apiKey = safeStorage.decryptString(Buffer.from(configured.encryptedKey, "base64"));
+  const result = await createDemoApiEvent({ apiKey, model: configured.model });
+  const status = await recordDemoApiEvent(demoApiKeyStorePath(), result);
+  await appendAuditEvent(auditPath(), { model: result.model, totalTokens: result.totalTokens, type: "demo-api-event-run" });
+  return { cancelled: false, event: result, status };
+});
 ipcMain.handle("account:add-api-source", async (_event, source) => {
   if (!safeStorage.isEncryptionAvailable()) throw new Error("Windows-protected storage is unavailable.");
   if (typeof source?.apiKey !== "string" || source.apiKey.trim().length === 0) throw new Error("An OpenAI Admin key is required.");
