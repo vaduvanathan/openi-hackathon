@@ -1,0 +1,65 @@
+const DEMO_DAYS = [
+  ["Jul 05", 420000, 115000, 280000],
+  ["Jul 06", 610000, 142000, 390000],
+  ["Jul 07", 520000, 128000, 330000],
+  ["Jul 08", 880000, 210000, 540000],
+  ["Jul 09", 760000, 190000, 470000],
+  ["Jul 10", 1120000, 280000, 690000],
+  ["Jul 11", 940000, 230000, 580000],
+  ["Jul 12", 1280000, 320000, 770000],
+  ["Jul 13", 1180000, 290000, 710000],
+  ["Jul 14", 1480000, 360000, 910000],
+  ["Jul 15", 1010000, 250000, 620000],
+  ["Jul 16", 1360000, 330000, 840000],
+  ["Jul 17", 1540000, 390000, 950000],
+  ["Jul 18", 1290000, 310000, 800000],
+];
+
+export function getDemoUsage() {
+  return {
+    source: "demo",
+    label: "Synthetic telemetry",
+    updatedAt: new Date().toISOString(),
+    accounts: [
+      {
+        id: "hackathon",
+        name: "Demo workspace A",
+        kind: "Illustrative sample",
+        status: "Demo",
+        usagePercent: 68,
+        reset: "14h 22m",
+        tokens: 7_800_000,
+        credits: "4,280 credits",
+        color: "cyan",
+      },
+      {
+        id: "personal",
+        name: "Demo workspace B",
+        kind: "Illustrative sample",
+        status: "Demo",
+        usagePercent: 24,
+        reset: "2d 04h",
+        tokens: 2_100_000,
+        credits: "1,950 credits",
+        color: "green",
+      },
+      {
+        id: "work",
+        name: "Demo workspace C",
+        kind: "Illustrative sample",
+        status: "Demo",
+        usagePercent: 83,
+        reset: "6h 08m",
+        tokens: 9_400_000,
+        credits: "Workspace data",
+        color: "amber",
+      },
+    ],
+    daily: DEMO_DAYS.map(([label, total, input, output]) => ({ label, total, input, output })),
+    models: [
+      { name: "GPT-5.5", tokens: 9_800_000, share: 58, color: "cyan" },
+      { name: "GPT-5.5-Codex", tokens: 5_700_000, share: 34, color: "violet" },
+      { name: "Other", tokens: 1_100_000, share: 8, color: "amber" },
+    ],
+  };
+}

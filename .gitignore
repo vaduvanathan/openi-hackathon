@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+reports/
+quarantine/
+data/
+*.log
+.env
+.env.*
+!.env.example
