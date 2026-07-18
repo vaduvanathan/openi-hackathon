@@ -1,0 +1,131 @@
+name: Codex PR review
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: codex-pr-review-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: Review pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch' || github.event.issue.pull_request
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PR_NUMBER: ${{ github.event.issue.number || inputs.pr_number }}
+    steps:
+      - name: Check trigger
+        id: gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName === "workflow_dispatch") {
+              core.setOutput("should_run", "true");
+              return;
+            }
+
+            const body = context.payload.comment.body || "";
+            const association = context.payload.comment.author_association;
+            const trusted = ["OWNER", "MEMBER", "COLLABORATOR"].includes(association);
+            const requested = /(^|\s)(@?codex\s+review(?:\s+it)?|\/codex-review)(\s|$)/i.test(body);
+
+            core.setOutput("should_run", requested && trusted ? "true" : "false");
+
+            if (requested && !trusted) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body: "Codex review only runs for trusted repository users.",
+              });
+            }
+
+      - name: Explain missing OpenAI key
+        if: steps.gate.outputs.should_run == 'true' && env.OPENAI_API_KEY == ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: "Codex review is configured, but `OPENAI_API_KEY` is not set in repository Actions secrets yet.",
+            });
+
+      - name: Check out pull request
+        if: steps.gate.outputs.should_run == 'true' && env.OPENAI_API_KEY != ''
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ env.PR_NUMBER }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Codex review
+        if: steps.gate.outputs.should_run == 'true' && env.OPENAI_API_KEY != ''
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: |
+            You are reviewing a pull request for Codex Session Guard.
+
+            Review only the pull request diff and nearby code needed to understand it. Do not modify files. Do not install dependencies, run package scripts, start servers, execute project code, or make network calls. It is okay to use read-only shell commands such as `git diff`, `git show`, `git status`, `rg`, and file reads.
+
+            Start by inspecting:
+
+            ```bash
+            git status --short
+            git diff --stat HEAD^1 HEAD
+            git diff --find-renames HEAD^1 HEAD
+            ```
+
+            Focus on issues that matter for this project:
+
+            - Privacy leaks, especially accidental reading/exporting of `auth.json`, tokens, cookies, API keys, `.env` files, or local session transcripts.
+            - Incorrect claims about account switching, billing, OpenAI server-side records, or permanent deletion.
+            - Risky filesystem behavior, especially destructive deletes instead of quarantine/restore.
+            - Handoff output quality: whether it is useful to the next agent while being redacted and scoped.
+            - Windows path handling, OneDrive paths, Unicode paths, and safe filesystem APIs.
+            - Missing tests or verification for scanner, redaction, handoff, or quarantine logic.
+            - User-facing wording that could make developers overtrust the tool.
+
+            Return a GitHub-ready review comment with:
+
+            1. A one-paragraph summary.
+            2. Blocking or high-risk findings first, with file and line references when possible.
+            3. Medium-risk findings or missing tests.
+            4. A short note if no blocking issues were found.
+
+            Avoid nitpicks unless they hide a real bug, privacy problem, or demo risk.
+          output-file: codex-pr-review.md
+          sandbox: read-only
+          safety-strategy: drop-sudo
+
+      - name: Post Codex review
+        if: steps.gate.outputs.should_run == 'true' && env.OPENAI_API_KEY != '' && steps.run_codex.outputs.final-message != ''
+        uses: actions/github-script@v7
+        env:
+          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: process.env.CODEX_FINAL_MESSAGE,
+            });
