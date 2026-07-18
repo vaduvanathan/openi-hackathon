@@ -5,6 +5,10 @@ OpenAI Build Week Hackathon project: Managex
 
 Managex helps developers safely switch Codex contexts by making local Codex state visible, generating clean handoff packages, and quarantining old sessions instead of deleting them.
 
+## Demo
+
+Watch the project demo: [Managex on YouTube](https://youtu.be/4qQkV15k4_Q)
+
 ## MVP Features
 
 - Connect multiple OpenAI API Platform organizations with separately named Admin API sources protected by Windows encryption.
