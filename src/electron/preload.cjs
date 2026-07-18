@@ -46,4 +46,5 @@ contextBridge.exposeInMainWorld("codexGuard", {
   listHandoffs: () => ipcRenderer.invoke("handoff:list"),
   openHandoffDirectory: () => ipcRenderer.invoke("handoff:open-directory"),
   importHandoff: () => ipcRenderer.invoke("handoff:import"),
+  transferHandoff: (fileName) => ipcRenderer.invoke("handoff:transfer", fileName),
 });

@@ -317,7 +317,7 @@ function renderHandoffs() {
     container.innerHTML = `<div class="empty-state">Create a handoff to save a sanitized context package here automatically.</div>`;
     return;
   }
-  container.innerHTML = state.handoffs.slice(0, 5).map((handoff) => `<div class="audit-row"><div><strong>${escapeHtml(handoff.fileName)}</strong><span>${formatBytes(handoff.size)}</span></div><time>${escapeHtml(formatTimestamp(handoff.createdAt))}</time></div>`).join("");
+  container.innerHTML = state.handoffs.slice(0, 8).map((handoff) => `<div class="audit-row handoff-row"><div><strong>${escapeHtml(handoff.fileName)}</strong><span>${formatBytes(handoff.size)} - saved ${escapeHtml(formatTimestamp(handoff.createdAt))}</span></div><div class="handoff-actions"><button class="button button-quiet" data-transfer-handoff="${escapeHtml(handoff.fileName)}">Transfer context</button></div></div>`).join("");
 }
 
 function describeAuditEvent(event) {
@@ -328,7 +328,7 @@ function describeAuditEvent(event) {
     "codex-session-quarantined": "Local session quarantined",
     "codex-session-restored": "Local session restored",
     "handoff-exported": "Handoff created",
-    "handoff-import-prepared": "Handoff prepared for ChatGPT",
+    "handoff-transfer-prepared": "Context prepared for Codex / ChatGPT",
     "local-branch-deleted": "Local branch deleted",
     "local-branch-restored": "Local branch restored",
     "remote-branch-deleted": "Remote branch deleted",
@@ -940,7 +940,7 @@ async function exportHandoff(event) {
     });
     closeHandoffDialog();
     await Promise.all([loadHandoffs(), loadAuditEvents()]);
-    showToast(result.chatGptPrepared ? `Saved ${result.fileName}, copied it, and opened ChatGPT.` : `Saved ${result.fileName}.`);
+    showToast(result.contextPrepared ? `Saved ${result.fileName}. Context prompt copied; choose a task, paste it, and press Enter.` : `Saved ${result.fileName}.`);
   } catch {
     showToast("Could not export the handoff report.");
   } finally {
@@ -968,9 +968,20 @@ async function importHandoff() {
   try {
     const result = await window.codexGuard.importHandoff();
     if (result.cancelled) return showToast("Handoff import cancelled.");
-    showToast("Handoff copied and ChatGPT opened. Review the draft, then send it.");
+    showToast("Context prompt copied. Choose a task, paste it, and press Enter.");
   } catch {
     showToast("Could not prepare that handoff document.");
+  }
+}
+
+async function transferHandoff(fileName) {
+  if (!window.codexGuard?.transferHandoff) return showToast("Electron bridge is not available.");
+  try {
+    const result = await window.codexGuard.transferHandoff(fileName);
+    await loadAuditEvents();
+    showToast(`${result.fileName}: context prompt copied. Choose a task, paste it, and press Enter.`);
+  } catch {
+    showToast("Could not prepare that saved handoff.");
   }
 }
 
@@ -1113,6 +1124,10 @@ $("#github-profile-dialog").addEventListener("close", () => $("#github-profile-f
 $("#export-handoff").addEventListener("click", openHandoffDialog);
 $("#import-handoff").addEventListener("click", importHandoff);
 $("#open-handoff-directory").addEventListener("click", openHandoffDirectory);
+$("#handoff-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-transfer-handoff]");
+  if (button) transferHandoff(button.dataset.transferHandoff);
+});
 $("#handoff-form").addEventListener("submit", exportHandoff);
 $("#handoff-task").addEventListener("change", applySelectedHandoffTask);
 $("#cancel-handoff").addEventListener("click", closeHandoffDialog);

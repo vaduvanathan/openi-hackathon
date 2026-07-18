@@ -43,9 +43,39 @@ function handoffFileName() {
   return `managex-handoff-${new Date().toISOString().replace(/[:.]/g, "-")}.md`;
 }
 
-async function prepareChatGptHandoff(handoff) {
-  clipboard.writeText(handoff);
+function createCodexContextPrompt({ handoff, filePath, intent = "transfer" }) {
+  const action = intent === "create"
+    ? "Managex has created an initial local context package for a task."
+    : "Managex is transferring a saved local context package to this task.";
+  return [
+    action,
+    "",
+    `Local Markdown location: ${filePath}`,
+    "",
+    "The local file is already saved. A cloud task cannot directly read or write this Windows path, so the complete sanitized context is included below.",
+    "Use it as the source of truth. Review the goal, current state, and next steps; then continue the task. If you are in a local desktop task with access to this folder, you may also update the file.",
+    "",
+    "--- BEGIN MANAGEX CONTEXT ---",
+    handoff,
+    "--- END MANAGEX CONTEXT ---",
+  ].join("\n");
+}
+
+async function prepareCodexContext({ handoff, filePath, intent }) {
+  clipboard.writeText(createCodexContextPrompt({ handoff, filePath, intent }));
   await shell.openExternal("https://chatgpt.com/");
+}
+
+async function readSavedHandoff(fileName) {
+  if (typeof fileName !== "string" || path.basename(fileName) !== fileName || !/\.(md|txt|json)$/i.test(fileName)) {
+    throw new Error("That handoff document is not available.");
+  }
+  const directory = path.resolve(handoffDirectory());
+  const filePath = path.resolve(directory, fileName);
+  if (path.dirname(filePath) !== directory) throw new Error("That handoff document is outside the Managex handoff folder.");
+  const fileInfo = await stat(filePath);
+  if (!fileInfo.isFile() || fileInfo.size > 512_000) throw new Error("Handoff documents must be smaller than 500 KB.");
+  return { filePath, handoff: await readFile(filePath, "utf8"), size: fileInfo.size };
 }
 
 async function accountSources() {
@@ -404,8 +434,8 @@ ipcMain.handle("handoff:export", async (_event, reportData) => {
     reportName: path.basename(filePath),
     type: "handoff-exported",
   });
-  if (reportData?.openChatGpt) await prepareChatGptHandoff(report);
-  return { chatGptPrepared: Boolean(reportData?.openChatGpt), fileName: path.basename(filePath), filePath };
+  if (reportData?.openChatGpt) await prepareCodexContext({ filePath, handoff: report, intent: "create" });
+  return { contextPrepared: Boolean(reportData?.openChatGpt), fileName: path.basename(filePath), filePath };
 });
 ipcMain.handle("handoff:list", async () => {
   const directory = handoffDirectory();
@@ -437,20 +467,30 @@ ipcMain.handle("handoff:import", async (event) => {
     defaultPath: handoffDirectory(),
     filters: [{ extensions: ["md", "txt", "json"], name: "Handoff documents" }],
     properties: ["openFile"],
-    title: "Choose a handoff document to copy into ChatGPT",
+    title: "Choose a handoff document to transfer to Codex",
   });
   if (result.canceled || !result.filePaths[0]) return { cancelled: true };
   const filePath = result.filePaths[0];
   const fileInfo = await stat(filePath);
   if (fileInfo.size > 512_000) throw new Error("Handoff documents must be smaller than 500 KB.");
   const handoff = await readFile(filePath, "utf8");
-  await prepareChatGptHandoff(handoff);
+  await prepareCodexContext({ filePath, handoff, intent: "transfer" });
   await appendAuditEvent(auditPath(), {
     reportName: path.basename(filePath),
     size: fileInfo.size,
-    type: "handoff-import-prepared",
+    type: "handoff-transfer-prepared",
   });
   return { cancelled: false, fileName: path.basename(filePath) };
+});
+ipcMain.handle("handoff:transfer", async (_event, fileName) => {
+  const { filePath, handoff, size } = await readSavedHandoff(fileName);
+  await prepareCodexContext({ filePath, handoff, intent: "transfer" });
+  await appendAuditEvent(auditPath(), {
+    reportName: path.basename(filePath),
+    size,
+    type: "handoff-transfer-prepared",
+  });
+  return { fileName: path.basename(filePath) };
 });
 
 app.whenReady().then(() => {
