@@ -31,9 +31,30 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 3200);
 }
 
+function friendlyError(error, fallback) {
+  const message = String(error?.message || error || "");
+  if (/api\.responses\.write|insufficient permissions/i.test(message)) return "This project key cannot create Responses. Create a Project API key with Responses write access, then reconnect it.";
+  if (/incorrect api key|invalid api key|authentication/i.test(message)) return "This API key was rejected. Check that it belongs to the selected OpenAI project.";
+  if (/insufficient_quota|billing|quota/i.test(message)) return "This project has no available API quota. Add billing or credits in the OpenAI API Platform, then try again.";
+  return fallback || message || "The requested action could not be completed.";
+}
+
+function setButtonLoading(button, loading, label = "Loading") {
+  if (!button) return;
+  if (loading) {
+    button.dataset.defaultLabel = button.textContent;
+    button.textContent = label;
+    button.disabled = true;
+    button.classList.add("is-loading");
+    return;
+  }
+  button.textContent = button.dataset.defaultLabel || button.textContent;
+  button.disabled = false;
+  button.classList.remove("is-loading");
+}
+
 function renderUsageStatus() {
   const live = state.usage?.source === "openai-api-platform";
-  const demo = state.usage?.source === "demo";
   const configured = state.usageStatus?.configured;
   const badge = $("#data-source-badge");
   const title = $("#usage-notice-title");
@@ -45,13 +66,6 @@ function renderUsageStatus() {
     title.textContent = "Live organization API usage is loaded.";
     body.textContent = "This source reports API Platform usage and costs only. It does not report ChatGPT or Codex personal quota.";
     loadButton.textContent = "Refresh API usage";
-    return;
-  }
-  if (demo) {
-    badge.textContent = "Demo preview";
-    title.textContent = "You are viewing illustrative demo data.";
-    body.textContent = "It is not associated with an OpenAI, Codex, ChatGPT, or GitHub account.";
-    loadButton.textContent = configured ? "Load API usage" : "API key needed";
     return;
   }
   badge.textContent = configured ? "API source ready" : "No live source";
@@ -66,7 +80,7 @@ function renderAccounts() {
   const accounts = state.usage?.accounts || [];
   const live = state.usage?.source === "openai-api-platform";
   $("#metric-tokens").textContent = accounts.length ? formatTokens(accounts.reduce((sum, account) => sum + account.tokens, 0)) : "--";
-  $("#metric-tokens-detail").textContent = live ? `Last ${state.usage.rangeDays} days` : state.usage?.source === "demo" ? "Illustrative sample" : "Load an API source";
+  $("#metric-tokens-detail").textContent = live ? `Last ${state.usage.rangeDays} days` : "Load an API source";
   $("#metric-accounts").textContent = live ? String(accounts.length) : "0";
   $("#metric-accounts-detail").textContent = live ? "OpenAI API Platform" : "No live sources";
 
@@ -95,7 +109,7 @@ function renderChart() {
   const days = Number(document.querySelector(".range-button.active")?.dataset.days || 14);
   const points = state.usage?.daily?.slice(-days) || [];
   if (!points.length) {
-    svg.innerHTML = `<text x="380" y="132" fill="#9ba6b3" font-size="13" text-anchor="middle">Load an API source or choose the demo preview.</text>`;
+    svg.innerHTML = `<text x="380" y="132" fill="#9ba6b3" font-size="13" text-anchor="middle">Connect an API source to load organization usage.</text>`;
     return;
   }
 
@@ -414,6 +428,7 @@ async function runDemoApiEvent() {
   if (!state.demoApi?.configured) return openDemoApiDialog();
   if (!window.codexGuard?.runDemoApiEvent) return showToast("Electron bridge is not available.");
   try {
+    setButtonLoading($("#run-demo-event"), true, "Creating");
     const result = await window.codexGuard.runDemoApiEvent();
     if (result.cancelled) return showToast("Live API event cancelled.");
     state.demoApi = result.status;
@@ -422,7 +437,9 @@ async function runDemoApiEvent() {
     if (state.usageStatus?.configured) await loadLiveUsage();
     showToast(`Live API event recorded: ${result.event.totalTokens} tokens on ${result.event.model}.`);
   } catch (error) {
-    showToast(error?.message || "Could not create the live API event.");
+    showToast(friendlyError(error, "Could not create the live API event."));
+  } finally {
+    setButtonLoading($("#run-demo-event"), false);
   }
 }
 
@@ -487,6 +504,7 @@ async function loadLiveUsage() {
     openApiSourceDialog();
     return;
   }
+  setButtonLoading($("#load-live-usage"), true, "Loading");
   try {
     state.usage = await window.codexGuard.loadOpenAIUsage({ days: 14 });
     renderUsage();
@@ -495,6 +513,8 @@ async function loadLiveUsage() {
     state.usage = null;
     renderUsage();
     showToast("Could not load OpenAI API usage. Check key permissions and try again.");
+  } finally {
+    setButtonLoading($("#load-live-usage"), false);
   }
 }
 
@@ -640,12 +660,15 @@ async function scanGitHubRepository(repository) {
 async function scanLocalAgentWorktrees() {
   if (!window.codexGuard?.scanLocalAgentWorktrees) return showToast("Electron bridge is not available.");
   try {
+    setButtonLoading($("#scan-local-worktrees"), true, "Scanning");
     state.localWorktreeScan = await window.codexGuard.scanLocalAgentWorktrees();
     renderLocalWorktrees();
     const count = state.localWorktreeScan.scans.length;
     showToast(count ? `Scanned ${count} local Codex or ChatGPT worktree ${count === 1 ? "repository" : "repositories"}.` : "No local Codex or ChatGPT worktrees were found.");
   } catch {
     showToast("Could not scan local Codex and ChatGPT worktrees.");
+  } finally {
+    setButtonLoading($("#scan-local-worktrees"), false);
   }
 }
 
@@ -653,18 +676,21 @@ async function openLocalWorktree(repositoryPath) {
   const scan = state.localWorktreeScan?.scans?.find((item) => item.repoPath === repositoryPath);
   if (!scan) return;
   await applyRepositoryScan(scan);
-  $("#repositories").scrollIntoView({ behavior: "smooth", block: "start" });
+  activatePage("repositories");
 }
 
 async function scanCodex() {
   if (!window.codexGuard?.scanCodexState) return showToast("Electron bridge is not available.");
   try {
+    setButtonLoading($("#scan-codex"), true, "Scanning");
     state.codex = await window.codexGuard.scanCodexState();
     renderCodexState();
     await refreshSessionCleanup();
     showToast("Local Codex state scanned.");
   } catch {
     showToast("Could not scan local Codex state.");
+  } finally {
+    setButtonLoading($("#scan-codex"), false);
   }
 }
 
@@ -843,18 +869,42 @@ async function restoreLocalBranch(manifestId) {
   }
 }
 
-async function exportHandoff() {
+function openHandoffDialog() {
+  const dialog = $("#handoff-dialog");
+  if (!dialog.open) dialog.showModal();
+  $("#handoff-name").focus();
+}
+
+function closeHandoffDialog() {
+  $("#handoff-form").reset();
+  $("#handoff-dialog").close();
+}
+
+async function exportHandoff(event) {
+  event?.preventDefault();
   if (!window.codexGuard?.exportHandoff) return showToast("Electron bridge is not available.");
+  const saveButton = $("#handoff-form button[type=submit]");
   try {
+    setButtonLoading(saveButton, true, "Saving");
     const result = await window.codexGuard.exportHandoff({
+      brief: {
+        currentState: $("#handoff-state").value,
+        goal: $("#handoff-goal").value,
+        nextSteps: $("#handoff-next").value,
+        title: $("#handoff-name").value,
+      },
       codex: state.codex,
+      openChatGpt: $("#handoff-open-chatgpt").checked,
       repository: state.repository,
       usage: state.usage,
     });
+    closeHandoffDialog();
     await Promise.all([loadHandoffs(), loadAuditEvents()]);
-    showToast(`Created ${result.fileName}. Open Handoffs to view it.`);
+    showToast(result.chatGptPrepared ? `Saved ${result.fileName}, copied it, and opened ChatGPT.` : `Saved ${result.fileName}.`);
   } catch {
     showToast("Could not export the handoff report.");
+  } finally {
+    setButtonLoading(saveButton, false);
   }
 }
 
@@ -878,7 +928,7 @@ async function importHandoff() {
   try {
     const result = await window.codexGuard.importHandoff();
     if (result.cancelled) return showToast("Handoff import cancelled.");
-    showToast("Handoff copied. Select a ChatGPT chat, paste, then press Enter.");
+    showToast("Handoff copied and ChatGPT opened. Review the draft, then send it.");
   } catch {
     showToast("Could not prepare that handoff document.");
   }
@@ -958,11 +1008,16 @@ async function removeGitHubProfile(login) {
   }
 }
 
-document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
+function activatePage(pageId) {
+  const page = document.getElementById(pageId);
+  if (!page) return;
+  document.querySelectorAll(".app-page").forEach((item) => item.classList.toggle("active", item === page));
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
-  button.classList.add("active");
-  document.querySelector(button.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-}));
+  document.querySelector(`.nav-item[data-page="${pageId}"]`)?.classList.add("active");
+  document.querySelector(".content")?.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => activatePage(button.dataset.page)));
 document.querySelectorAll(".range-button").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".range-button").forEach((item) => item.classList.remove("active"));
   button.classList.add("active");
@@ -970,7 +1025,6 @@ document.querySelectorAll(".range-button").forEach((button) => button.addEventLi
 }));
 $("#load-live-usage").addEventListener("click", loadLiveUsage);
 $("#run-demo-event").addEventListener("click", runDemoApiEvent);
-$("#load-demo-usage").addEventListener("click", loadDemoUsage);
 $("#refresh-usage").addEventListener("click", () => state.usage?.source === "demo" ? loadDemoUsage() : loadLiveUsage());
 $("#source-list").addEventListener("click", (event) => {
   if (event.target.closest("[data-open-chatgpt]")) openChatGpt();
@@ -1016,9 +1070,13 @@ $("#github-profile-form").addEventListener("submit", addGitHubProfile);
 $("#cancel-github-profile").addEventListener("click", closeGitHubProfileDialog);
 $("#cancel-github-profile-bottom").addEventListener("click", closeGitHubProfileDialog);
 $("#github-profile-dialog").addEventListener("close", () => $("#github-profile-form").reset());
-$("#export-handoff").addEventListener("click", exportHandoff);
+$("#export-handoff").addEventListener("click", openHandoffDialog);
 $("#import-handoff").addEventListener("click", importHandoff);
 $("#open-handoff-directory").addEventListener("click", openHandoffDirectory);
+$("#handoff-form").addEventListener("submit", exportHandoff);
+$("#cancel-handoff").addEventListener("click", closeHandoffDialog);
+$("#cancel-handoff-bottom").addEventListener("click", closeHandoffDialog);
+$("#handoff-dialog").addEventListener("close", () => $("#handoff-form").reset());
 $("#refresh-recoveries").addEventListener("click", loadBranchRecoveries);
 $("#refresh-audit").addEventListener("click", loadAuditEvents);
 $("#export-audit").addEventListener("click", exportAudit);

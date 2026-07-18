@@ -14,19 +14,36 @@ function formatTokens(tokens) {
   return String(tokens);
 }
 
-export function createHandoffReport({ codex, repository, usage } = {}) {
+export function createHandoffReport({ brief, codex, repository, usage } = {}) {
   const lines = [
     "# Codex Session Guard Handoff",
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
+  ];
+
+  const handoffBrief = {
+    currentState: typeof brief?.currentState === "string" ? brief.currentState.trim() : "",
+    goal: typeof brief?.goal === "string" ? brief.goal.trim() : "",
+    nextSteps: typeof brief?.nextSteps === "string" ? brief.nextSteps.trim() : "",
+    title: typeof brief?.title === "string" ? brief.title.trim() : "",
+  };
+  if (handoffBrief.title || handoffBrief.goal || handoffBrief.currentState || handoffBrief.nextSteps) {
+    lines.splice(4, 0, "## Continuation Brief", "", `- Title: ${handoffBrief.title || "Untitled handoff"}`);
+    if (handoffBrief.goal) lines.push("", "### Goal", "", handoffBrief.goal);
+    if (handoffBrief.currentState) lines.push("", "### Current State", "", handoffBrief.currentState);
+    if (handoffBrief.nextSteps) lines.push("", "### Next Steps", "", handoffBrief.nextSteps);
+    lines.push("");
+  }
+
+  lines.push(
     "## Scope",
     "",
     "This report contains local repository and metadata-only state. It does not include chat transcripts, auth files, API keys, access tokens, cookies, or environment variable values.",
     "",
     "## Repository",
     "",
-  ];
+  );
 
   if (repository) {
     lines.push(`- Folder: ${path.basename(repository.repoPath)}`);

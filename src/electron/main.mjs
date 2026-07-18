@@ -43,6 +43,11 @@ function handoffFileName() {
   return `codex-handoff-${new Date().toISOString().replace(/[:.]/g, "-")}.md`;
 }
 
+async function prepareChatGptHandoff(handoff) {
+  clipboard.writeText(handoff);
+  await shell.openExternal("https://chatgpt.com/");
+}
+
 async function accountSources() {
   return getAccountSources({ environment: process.env, storedSources: await listApiSources(apiSourceStorePath()) });
 }
@@ -399,7 +404,8 @@ ipcMain.handle("handoff:export", async (_event, reportData) => {
     reportName: path.basename(filePath),
     type: "handoff-exported",
   });
-  return { fileName: path.basename(filePath), filePath };
+  if (reportData?.openChatGpt) await prepareChatGptHandoff(report);
+  return { chatGptPrepared: Boolean(reportData?.openChatGpt), fileName: path.basename(filePath), filePath };
 });
 ipcMain.handle("handoff:list", async () => {
   const directory = handoffDirectory();
@@ -438,8 +444,7 @@ ipcMain.handle("handoff:import", async (event) => {
   const fileInfo = await stat(filePath);
   if (fileInfo.size > 512_000) throw new Error("Handoff documents must be smaller than 500 KB.");
   const handoff = await readFile(filePath, "utf8");
-  clipboard.writeText(handoff);
-  await shell.openExternal("https://chatgpt.com/");
+  await prepareChatGptHandoff(handoff);
   await appendAuditEvent(auditPath(), {
     reportName: path.basename(filePath),
     size: fileInfo.size,

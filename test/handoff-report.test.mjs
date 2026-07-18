@@ -18,3 +18,18 @@ test("creates a sanitized handoff report without credential content", () => {
   assert.match(report, /codex\/merged-old/);
   assert.doesNotMatch(report, /OPENAI_ADMIN_KEY|auth\.json|sk-/i);
 });
+
+test("includes an explicit user-authored continuation brief", () => {
+  const report = createHandoffReport({
+    brief: {
+      currentState: "Repository cleanup is implemented.",
+      goal: "Finish the account dashboard.",
+      nextSteps: "Run the visual review.",
+      title: "Continue the MVP",
+    },
+  });
+
+  assert.match(report, /Title: Continue the MVP/);
+  assert.match(report, /Finish the account dashboard/);
+  assert.match(report, /Run the visual review/);
+});

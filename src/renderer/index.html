@@ -17,10 +17,12 @@
           </div>
         </div>
         <nav class="nav-list" aria-label="Primary navigation">
-          <button class="nav-item active" data-target="#overview"><span class="nav-icon">O</span>Overview</button>
-          <button class="nav-item" data-target="#repositories"><span class="nav-icon">R</span>Repositories</button>
-          <button class="nav-item" data-target="#local-sessions"><span class="nav-icon">S</span>Local sessions</button>
-          <button class="nav-item" data-target="#accounts"><span class="nav-icon">A</span>Accounts</button>
+          <button class="nav-item active" data-page="overview"><span class="nav-icon">O</span>Overview</button>
+          <button class="nav-item" data-page="repositories"><span class="nav-icon">R</span>Repositories</button>
+          <button class="nav-item" data-page="local-sessions"><span class="nav-icon">S</span>Local state</button>
+          <button class="nav-item" data-page="accounts"><span class="nav-icon">A</span>Accounts</button>
+          <button class="nav-item" data-page="handoffs"><span class="nav-icon">H</span>Handoffs</button>
+          <button class="nav-item" data-page="activity"><span class="nav-icon">L</span>Activity</button>
         </nav>
         <div class="sidebar-footer">
           <span class="status-dot"></span>
@@ -29,7 +31,8 @@
       </aside>
 
       <main class="content">
-        <header id="overview" class="topbar">
+        <section id="overview" class="app-page active" aria-label="Overview">
+        <header class="topbar">
           <div>
             <p class="eyebrow">Codex workspace / overview</p>
             <h1>Usage at a glance</h1>
@@ -39,16 +42,12 @@
             <span id="data-source-badge" class="demo-badge"><span class="status-dot"></span>No live source</span>
             <button id="load-live-usage" class="button button-quiet">API key needed</button>
             <button id="run-demo-event" class="button button-quiet">Create API event</button>
-            <button id="import-handoff" class="button button-quiet">Import handoff</button>
-            <button id="export-handoff" class="button button-quiet">Create handoff</button>
-            <button id="scan-repository" class="button button-primary">Scan repository</button>
           </div>
         </header>
 
         <section class="alert-strip">
           <div class="alert-symbol">i</div>
-          <div><strong id="usage-notice-title">No live OpenAI API source is connected.</strong><span id="usage-notice-body">Set OPENAI_ADMIN_KEY before launching the app to load organization API usage and costs.</span></div>
-          <button id="load-demo-usage" class="button button-quiet">View demo</button>
+          <div><strong id="usage-notice-title">No live OpenAI API source is connected.</strong><span id="usage-notice-body">Connect an organization telemetry source to load OpenAI API Platform usage and costs.</span></div>
         </section>
 
         <section class="metric-grid" aria-label="Workspace metrics">
@@ -58,7 +57,7 @@
           <article class="metric-card metric-green"><span>Local state</span><strong id="metric-state">Not scanned</strong><small id="metric-state-detail">Codex home</small></article>
         </section>
 
-        <section class="dashboard-grid">
+        <section class="overview-chart">
           <article class="panel chart-panel">
             <div class="panel-heading">
               <div><p class="eyebrow">Token activity</p><h2>Usage over time</h2></div>
@@ -67,17 +66,25 @@
             <div class="chart-legend"><span><i class="legend-dot dot-cyan"></i>Total tokens</span><span><i class="legend-dot dot-violet"></i>Output tokens</span></div>
             <svg id="usage-chart" class="usage-chart" viewBox="0 0 760 260" role="img" aria-label="Token usage chart"></svg>
           </article>
-
-          <article id="accounts" class="panel account-panel">
-            <div class="panel-heading"><div><p class="eyebrow">Usage sources</p><h2>Connection status</h2></div><button class="icon-button" title="Refresh usage source" id="refresh-usage">R</button></div>
-            <div id="account-list" class="account-list"></div>
-            <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Account access</p><h2>Connected sources</h2></div><button id="add-api-source" class="button button-quiet">Add API source</button></div><div id="source-list" class="source-list"><div class="empty-state">Loading account sources.</div></div></div>
-            <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Live demo event</p><h2>Generate API activity</h2></div></div><div id="demo-api-event" class="source-list"><div class="empty-state">Checking demo API event setup.</div></div></div>
-          </article>
+        </section>
         </section>
 
-        <section class="lower-grid">
-          <article id="repositories" class="panel repo-panel">
+        <section id="accounts" class="app-page" aria-label="Accounts">
+          <header class="page-header"><div><p class="eyebrow">Account control</p><h1>Usage sources</h1><p class="subhead">Connect organization telemetry, project demo access, and public GitHub profiles.</p></div><button id="add-api-source" class="button button-primary">Add API source</button></header>
+          <div class="page-split">
+          <article class="panel account-panel">
+            <div class="panel-heading"><div><p class="eyebrow">Usage sources</p><h2>Connection status</h2></div><button class="icon-button" title="Refresh usage source" id="refresh-usage">R</button></div>
+            <div id="account-list" class="account-list"></div>
+            <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Account access</p><h2>Connected sources</h2></div></div><div id="source-list" class="source-list"><div class="empty-state">Loading account sources.</div></div></div>
+            <div class="source-block"><div class="panel-heading compact"><div><p class="eyebrow">Live demo event</p><h2>Generate API activity</h2></div></div><div id="demo-api-event" class="source-list"><div class="empty-state">Checking demo API event setup.</div></div></div>
+          </article>
+          <article class="panel side-panel"><div class="panel-heading"><div><p class="eyebrow">Repository access</p><h2>GitHub profiles</h2></div><div class="inline-actions"><button id="refresh-profiles" class="icon-button" title="Refresh profiles">R</button><button id="add-github-profile" class="button button-quiet">Add profile</button></div></div><div id="github-profiles" class="github-profiles"><div class="empty-state">Add a GitHub username to track its public repository activity.</div></div></article>
+          </div>
+        </section>
+
+        <section id="repositories" class="app-page" aria-label="Repositories">
+          <header class="page-header"><div><p class="eyebrow">Repository hygiene</p><h1>Branch cleanup</h1><p class="subhead">Review GitHub repositories, local worktrees, and safe cleanup candidates in one focused workspace.</p></div><button id="scan-repository" class="button button-primary">Scan repository</button></header>
+          <article class="panel repo-panel">
             <div class="panel-heading"><div><p class="eyebrow">Repository hygiene</p><h2 id="repo-title">No repository selected</h2></div><div class="inline-actions"><button id="scan-local-folder" class="button button-quiet">Scan folder</button><button id="scan-local-worktrees" class="button button-quiet">Scan local worktrees</button><span id="repo-status" class="pill pill-muted">Waiting</span></div></div>
             <div id="repo-summary" class="repo-summary"><span>Branches</span><strong>--</strong><span>Worktrees</span><strong>--</strong><span>Safe candidates</span><strong>--</strong></div>
             <div class="selection-toolbar"><span id="branch-selection-count">0 selected</span><button id="delete-selected-branches" class="button button-danger" disabled>Delete selected local</button></div>
@@ -86,18 +93,42 @@
             <div class="remote-block"><div class="panel-heading compact"><div><p class="eyebrow">Automatic local discovery</p><h2>Codex and ChatGPT worktrees</h2></div></div><div id="local-worktree-list" class="remote-candidate-list"><div class="empty-state">Run “Scan local worktrees” to find Codex and ChatGPT-managed Git worktrees without choosing a folder.</div></div></div>
             <div class="recovery-block"><div class="panel-heading compact"><div><p class="eyebrow">Branch recovery</p><h2>Deleted local branches</h2></div><button id="refresh-recoveries" class="button button-quiet">Refresh</button></div><div id="recovery-list" class="recovery-list"><div class="empty-state">No deleted local branches are available to restore.</div></div></div>
           </article>
+        </section>
 
+        <section id="local-sessions" class="app-page" aria-label="Local state">
+          <header class="page-header"><div><p class="eyebrow">Local Codex state</p><h1>Sessions and storage</h1><p class="subhead">Inspect local metadata and clean up selected session files without touching cloud history.</p></div><button id="scan-codex" class="button button-primary">Scan local state</button></header>
           <article class="panel state-panel">
-            <div class="panel-heading"><div><p class="eyebrow">Local Codex state</p><h2>Storage snapshot</h2></div><button id="scan-codex" class="button button-quiet">Scan now</button></div>
+            <div class="panel-heading"><div><p class="eyebrow">Storage snapshot</p><h2>Local metadata</h2></div></div>
             <div id="state-list" class="state-list"><div class="empty-state">No local scan yet.</div></div>
             <div class="desktop-clients-block"><p class="eyebrow">Desktop companion</p><div id="desktop-client-list" class="state-list"><div class="empty-state">Checking for ChatGPT and Codex desktop clients.</div></div></div>
-            <div id="local-sessions" class="session-block"><div class="panel-heading compact"><div><p class="eyebrow">Local session cleanup</p><h2>Session files</h2></div><button id="refresh-sessions" class="button button-quiet">Refresh</button></div><div class="selection-toolbar"><span id="session-selection-count">0 selected</span><button id="quarantine-selected-sessions" class="button button-danger" disabled>Quarantine selected</button></div><div id="session-list" class="session-list"><div class="empty-state">Scan local Codex state to review session files.</div></div><div class="session-recovery"><p class="eyebrow">Quarantine recovery</p><div id="session-recovery-list" class="session-list"><div class="empty-state">No quarantined sessions are available to restore.</div></div></div></div>
-            <div class="github-block"><div class="panel-heading compact"><div><p class="eyebrow">Repository access</p><h2>GitHub profiles</h2></div><div class="inline-actions"><button id="refresh-profiles" class="icon-button" title="Refresh profiles">R</button><button id="add-github-profile" class="button button-quiet">Add profile</button></div></div><div id="github-profiles" class="github-profiles"><div class="empty-state">Add a GitHub username to track its public repository activity.</div></div></div>
+            <div class="session-block"><div class="panel-heading compact"><div><p class="eyebrow">Local session cleanup</p><h2>Session files</h2></div><button id="refresh-sessions" class="button button-quiet">Refresh</button></div><div class="selection-toolbar"><span id="session-selection-count">0 selected</span><button id="quarantine-selected-sessions" class="button button-danger" disabled>Quarantine selected</button></div><div id="session-list" class="session-list"><div class="empty-state">Scan local Codex state to review session files.</div></div><div class="session-recovery"><p class="eyebrow">Quarantine recovery</p><div id="session-recovery-list" class="session-list"><div class="empty-state">No quarantined sessions are available to restore.</div></div></div></div>
           </article>
         </section>
-        <section id="activity" class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Recent activity</h2></div><div class="inline-actions"><button id="refresh-audit" class="icon-button" title="Refresh activity">R</button><button id="export-audit" class="button button-quiet">Export audit</button></div></div><div id="audit-list" class="audit-list"><div class="empty-state">Actions such as cleanup, restore, source changes, and handoffs appear here.</div></div></section>
-        <section class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">Context handoffs</p><h2>Saved handoffs</h2></div><button id="open-handoff-directory" class="button button-quiet">Open handoffs</button></div><div id="handoff-list" class="audit-list"><div class="empty-state">Create a handoff to save a sanitized context package here automatically.</div></div></section>
+        <section id="handoffs" class="app-page" aria-label="Handoffs">
+          <header class="page-header"><div><p class="eyebrow">Context continuity</p><h1>Handoffs</h1><p class="subhead">Write a specific continuation brief, save a sanitized document locally, and prepare it for ChatGPT.</p></div><div class="inline-actions"><button id="import-handoff" class="button button-quiet">Prepare for ChatGPT</button><button id="export-handoff" class="button button-primary">Create handoff</button></div></header>
+          <article class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">Saved handoffs</p><h2>Local handoff documents</h2></div><button id="open-handoff-directory" class="button button-quiet">Open folder</button></div><div id="handoff-list" class="audit-list"><div class="empty-state">Create a handoff to save a sanitized context package here automatically.</div></div></article>
+        </section>
+        <section id="activity" class="app-page" aria-label="Activity">
+          <header class="page-header"><div><p class="eyebrow">Audit trail</p><h1>Activity</h1><p class="subhead">Review local scans, cleanup, handoff preparation, and source changes.</p></div><div class="inline-actions"><button id="refresh-audit" class="button button-quiet">Refresh</button><button id="export-audit" class="button button-primary">Export audit</button></div></header>
+          <article class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">Recent activity</p><h2>Local audit events</h2></div></div><div id="audit-list" class="audit-list"><div class="empty-state">Actions such as cleanup, restore, source changes, and handoffs appear here.</div></div></article>
+        </section>
         <div id="toast" class="toast" role="status"></div>
+        <dialog id="handoff-dialog" class="app-dialog handoff-dialog" aria-labelledby="handoff-title">
+          <form id="handoff-form" method="dialog">
+            <div class="dialog-heading"><div><p class="eyebrow">Create a handoff</p><h2 id="handoff-title">Describe what should continue</h2></div><button id="cancel-handoff" class="icon-button" type="button" title="Close">X</button></div>
+            <label class="field-label" for="handoff-name">Handoff title</label>
+            <input id="handoff-name" class="text-input" maxlength="90" placeholder="Continue Codex Guard MVP" required />
+            <label class="field-label" for="handoff-goal">Goal</label>
+            <textarea id="handoff-goal" class="text-input" maxlength="2000" placeholder="What should the next task achieve?" required></textarea>
+            <label class="field-label" for="handoff-state">Current state</label>
+            <textarea id="handoff-state" class="text-input" maxlength="3000" placeholder="What is complete, in progress, or blocked?"></textarea>
+            <label class="field-label" for="handoff-next">Next steps</label>
+            <textarea id="handoff-next" class="text-input" maxlength="3000" placeholder="What should happen next?"></textarea>
+            <label class="check-row"><input id="handoff-open-chatgpt" type="checkbox" checked />Copy the handoff and open ChatGPT after saving</label>
+            <p class="dialog-note">The document is saved automatically. ChatGPT does not offer a supported external file-attachment or composer-control API, so the app copies the sanitized handoff and opens ChatGPT for you to review and send.</p>
+            <div class="dialog-actions"><button id="cancel-handoff-bottom" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Save handoff</button></div>
+          </form>
+        </dialog>
         <dialog id="api-source-dialog" class="app-dialog" aria-labelledby="api-source-title">
           <form id="api-source-form" method="dialog">
             <div class="dialog-heading"><div><p class="eyebrow">Live telemetry</p><h2 id="api-source-title">Connect OpenAI API source</h2></div><button id="cancel-api-source" class="icon-button" type="button" title="Close">X</button></div>
