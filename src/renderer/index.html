@@ -76,17 +76,19 @@
 
         <section class="lower-grid">
           <article id="repositories" class="panel repo-panel">
-            <div class="panel-heading"><div><p class="eyebrow">Repository hygiene</p><h2 id="repo-title">No repository selected</h2></div><span id="repo-status" class="pill pill-muted">Waiting</span></div>
+            <div class="panel-heading"><div><p class="eyebrow">Repository hygiene</p><h2 id="repo-title">No repository selected</h2></div><div class="inline-actions"><button id="scan-local-folder" class="button button-quiet">Scan folder</button><button id="scan-local-worktrees" class="button button-quiet">Scan local worktrees</button><span id="repo-status" class="pill pill-muted">Waiting</span></div></div>
             <div id="repo-summary" class="repo-summary"><span>Branches</span><strong>--</strong><span>Worktrees</span><strong>--</strong><span>Safe candidates</span><strong>--</strong></div>
             <div class="selection-toolbar"><span id="branch-selection-count">0 selected</span><button id="delete-selected-branches" class="button button-danger" disabled>Delete selected local</button></div>
             <div class="table-wrap"><table><thead><tr><th>Branch</th><th>Age</th><th>State</th><th>Action</th></tr></thead><tbody id="branch-table"><tr><td colspan="4" class="empty-state">Choose a repository to scan.</td></tr></tbody></table></div>
             <div class="remote-block"><div class="panel-heading compact"><div><p class="eyebrow">Remote branch hygiene</p><h2>Origin cleanup review</h2></div><span id="remote-sync-status" class="pill pill-muted">Not scanned</span></div><div id="remote-candidate-list" class="remote-candidate-list"><div class="empty-state">Scan a repository to fetch origin and review merged, stale remote branches.</div></div></div>
+            <div class="remote-block"><div class="panel-heading compact"><div><p class="eyebrow">Automatic local discovery</p><h2>Codex and ChatGPT worktrees</h2></div></div><div id="local-worktree-list" class="remote-candidate-list"><div class="empty-state">Run “Scan local worktrees” to find Codex and ChatGPT-managed Git worktrees without choosing a folder.</div></div></div>
             <div class="recovery-block"><div class="panel-heading compact"><div><p class="eyebrow">Branch recovery</p><h2>Deleted local branches</h2></div><button id="refresh-recoveries" class="button button-quiet">Refresh</button></div><div id="recovery-list" class="recovery-list"><div class="empty-state">No deleted local branches are available to restore.</div></div></div>
           </article>
 
           <article class="panel state-panel">
             <div class="panel-heading"><div><p class="eyebrow">Local Codex state</p><h2>Storage snapshot</h2></div><button id="scan-codex" class="button button-quiet">Scan now</button></div>
             <div id="state-list" class="state-list"><div class="empty-state">No local scan yet.</div></div>
+            <div class="desktop-clients-block"><p class="eyebrow">Desktop companion</p><div id="desktop-client-list" class="state-list"><div class="empty-state">Checking for ChatGPT and Codex desktop clients.</div></div></div>
             <div id="local-sessions" class="session-block"><div class="panel-heading compact"><div><p class="eyebrow">Local session cleanup</p><h2>Session files</h2></div><button id="refresh-sessions" class="button button-quiet">Refresh</button></div><div class="selection-toolbar"><span id="session-selection-count">0 selected</span><button id="quarantine-selected-sessions" class="button button-danger" disabled>Quarantine selected</button></div><div id="session-list" class="session-list"><div class="empty-state">Scan local Codex state to review session files.</div></div><div class="session-recovery"><p class="eyebrow">Quarantine recovery</p><div id="session-recovery-list" class="session-list"><div class="empty-state">No quarantined sessions are available to restore.</div></div></div></div>
             <div class="github-block"><div class="panel-heading compact"><div><p class="eyebrow">Repository access</p><h2>GitHub profiles</h2></div><div class="inline-actions"><button id="refresh-profiles" class="icon-button" title="Refresh profiles">R</button><button id="add-github-profile" class="button button-quiet">Add profile</button></div></div><div id="github-profiles" class="github-profiles"><div class="empty-state">Add a GitHub username to track its public repository activity.</div></div></div>
           </article>
@@ -112,6 +114,13 @@
             <p class="dialog-note">This tracks public profile and repository metadata only. Private repositories are handled through the repository's own Git remote and GitHub CLI verification.</p>
             <div class="dialog-actions"><button id="cancel-github-profile-bottom" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Add profile</button></div>
           </form>
+        </dialog>
+        <dialog id="repository-dialog" class="app-dialog repository-dialog" aria-labelledby="repository-dialog-title">
+          <div class="dialog-heading"><div><p class="eyebrow">GitHub CLI</p><h2 id="repository-dialog-title">Choose a repository to scan</h2></div><button id="close-repository-dialog" class="icon-button" type="button" title="Close">X</button></div>
+          <p id="github-cli-notice" class="dialog-note">Checking GitHub CLI accounts.</p>
+          <div class="repository-dialog-controls"><label class="field-label" for="github-cli-account">GitHub account</label><div class="dialog-inline"><select id="github-cli-account" aria-label="GitHub account"></select><button id="refresh-github-cli" class="icon-button" title="Refresh accounts and repositories">R</button></div></div>
+          <div id="github-repository-list" class="github-repository-list"><div class="empty-state">Loading repositories.</div></div>
+          <div class="dialog-actions"><button id="close-repository-dialog-bottom" class="button button-quiet" type="button">Close</button></div>
         </dialog>
       </main>
     </div>

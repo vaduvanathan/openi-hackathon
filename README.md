@@ -16,6 +16,9 @@ Codex Session Guard helps developers safely switch Codex contexts by making loca
 - Scan local Codex metadata without opening protected names such as `auth.json` or `.env` files.
 - Quarantine one or many selected local Codex session files, then restore them later without overwriting an existing file.
 - Add multiple public GitHub usernames to view public account/repository activity without collecting GitHub credentials.
+- Reuse signed-in GitHub CLI accounts to list owned repositories, clone or refresh a selected repository into an app-managed inspection cache, and scan it without choosing a local folder.
+- Automatically look for Git repositories only in supported local Codex and ChatGPT worktree roots, then report cleanup candidates without scanning arbitrary files on the device.
+- Detect supported ChatGPT and Codex Windows desktop executables in common installation locations; desktop detection never reads app chat databases or browser sessions.
 - Create sanitized handoff documents automatically, import one into the clipboard, and open ChatGPT for a user-controlled paste.
 - Keep an in-app audit trail and automatically export it as JSON for a demo or incident report.
 

@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } fr
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { addApiSource, addGitHubProfileConnection, appendAuditEvent, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository } from "../core/index.mjs";
+import { addApiSource, addGitHubProfileConnection, appendAuditEvent, checkoutGitHubCliRepository, createCleanupPlan, createHandoffReport, deleteSafeLocalBranch, deleteSafeLocalBranches, deleteVerifiedRemoteBranch, discoverLocalAgentWorktrees, discoverOpenAIDesktopClients, fetchOpenAIUsage, getAccountSources, getDemoUsage, getEncryptedApiSource, getOpenAIUsageStatus, listApiSources, listAuditEvents, listCodexSessionCandidates, listGitHubCliAccounts, listGitHubCliRepositories, listGitHubProfileConnections, listLocalBranchRecoveryManifests, listQuarantinedCodexSessions, mergeOpenAIUsageReports, quarantineCodexSession, quarantineCodexSessions, removeApiSource, removeGitHubProfileConnection, restoreQuarantinedCodexSession, restoreSafeLocalBranch, scanCodexState, scanGitHubProfiles, scanRepository, switchGitHubCliAccount } from "../core/index.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -25,6 +25,10 @@ function handoffDirectory() {
 
 function githubProfileStorePath() {
   return path.join(app.getPath("userData"), "github", "profiles.json");
+}
+
+function githubRepositoryCacheDirectory() {
+  return path.join(app.getPath("userData"), "repository-cache");
 }
 
 function auditPath() {
@@ -280,6 +284,14 @@ ipcMain.handle("account:remove-api-source", async (event, sourceId) => {
 });
 ipcMain.handle("account:open-chatgpt", () => shell.openExternal("https://chatgpt.com/"));
 ipcMain.handle("github:profiles", (_event, logins) => scanGitHubProfiles(logins));
+ipcMain.handle("github:cli-accounts", () => listGitHubCliAccounts());
+ipcMain.handle("github:cli-switch-account", async (_event, login) => switchGitHubCliAccount(login));
+ipcMain.handle("github:cli-repositories", (_event, login) => listGitHubCliRepositories(login));
+ipcMain.handle("github:cli-checkout", async (_event, repository) => {
+  const checkout = await checkoutGitHubCliRepository(repository, githubRepositoryCacheDirectory());
+  await appendAuditEvent(auditPath(), { repository: checkout.repository, type: checkout.cached ? "github-repository-refreshed" : "github-repository-cloned" });
+  return checkout;
+});
 ipcMain.handle("github:connections", () => listGitHubProfileConnections(githubProfileStorePath()));
 ipcMain.handle("github:add-connection", async (_event, login) => {
   const profile = await addGitHubProfileConnection(githubProfileStorePath(), login);
@@ -300,6 +312,15 @@ ipcMain.handle("github:remove-connection", async (event, login) => {
   await appendAuditEvent(auditPath(), { login: profile.login, type: "github-profile-removed" });
   return { cancelled: false, profile };
 });
+ipcMain.handle("local:agent-worktrees", async () => {
+  const discovery = await discoverLocalAgentWorktrees();
+  const repositories = await Promise.allSettled(discovery.repositories.map(async (repositoryPath) => scanRepository(repositoryPath)));
+  return {
+    ...discovery,
+    scans: repositories.flatMap((result) => result.status === "fulfilled" ? [result.value] : []),
+  };
+});
+ipcMain.handle("desktop:clients", () => discoverOpenAIDesktopClients());
 ipcMain.handle("audit:list", () => listAuditEvents(auditPath()));
 ipcMain.handle("audit:export", async () => {
   const events = await listAuditEvents(auditPath(), { limit: 200 });

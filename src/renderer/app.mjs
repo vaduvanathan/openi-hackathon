@@ -1,4 +1,4 @@
-const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, githubConnections: [], githubProfiles: [], repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
+const state = { accountSources: [], accountStorage: null, auditEvents: [], branchRecoveries: [], codex: null, desktopClients: [], githubCli: { accounts: [], available: false }, githubConnections: [], githubProfiles: [], githubRepositories: [], localWorktreeScan: null, repository: null, selectedBranches: new Set(), selectedSessions: new Map(), sessionCandidates: null, sessionRecoveries: [], usage: null, usageStatus: null };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -203,6 +203,34 @@ function renderCodexState() {
   $("#state-list").innerHTML = categories.length ? categories.map((category) => `<div class="state-row"><span>${escapeHtml(category.root.split(/[\\/]/).pop())}</span><strong>${category.fileCount} files - ${formatTokens(category.totalBytes)}B</strong></div>`).join("") : `<div class="empty-state">No common Codex state folders found.</div>`;
 }
 
+function renderDesktopClients() {
+  const container = $("#desktop-client-list");
+  if (!container) return;
+  if (!state.desktopClients.length) {
+    container.innerHTML = `<div class="empty-state">No supported ChatGPT or Codex desktop executable was detected in common Windows locations.</div>`;
+    return;
+  }
+  container.innerHTML = state.desktopClients.map((client) => `<div class="state-row"><span>${escapeHtml(client.label)}</span><strong>Detected</strong></div>`).join("");
+}
+
+function renderLocalWorktrees() {
+  const container = $("#local-worktree-list");
+  if (!container) return;
+  if (state.localWorktreeScan === null) {
+    container.innerHTML = `<div class="empty-state">Run an automatic local scan to find Codex and ChatGPT-managed Git worktrees.</div>`;
+    return;
+  }
+  const scans = state.localWorktreeScan.scans || [];
+  if (!scans.length) {
+    container.innerHTML = `<div class="empty-state">No Git worktrees were found in the supported Codex or ChatGPT local roots.</div>`;
+    return;
+  }
+  container.innerHTML = scans.map((scan) => {
+    const name = scan.repoPath.split(/[\\/]/).pop() || scan.repoPath;
+    return `<div class="worktree-row"><div><strong>${escapeHtml(name)}</strong><span>${scan.summary.localDeleteCandidates} local and ${scan.summary.remoteDeleteCandidates} remote cleanup candidate${scan.summary.localDeleteCandidates + scan.summary.remoteDeleteCandidates === 1 ? "" : "s"}</span></div><button class="button button-quiet" data-open-local-worktree="${escapeHtml(scan.repoPath)}">Review</button></div>`;
+  }).join("");
+}
+
 function renderSessionCleanup() {
   const candidateContainer = $("#session-list");
   const recoveryContainer = $("#session-recovery-list");
@@ -371,16 +399,115 @@ async function loadDemoUsage() {
   showToast("Showing illustrative demo data.");
 }
 
-async function scanRepository() {
+async function applyRepositoryScan(repository) {
+  state.repository = repository;
+  state.selectedBranches.clear();
+  renderRepository();
+  await Promise.all([loadBranchRecoveries(), loadAuditEvents()]);
+}
+
+async function scanManualRepository() {
   if (!window.codexGuard?.chooseRepository) return showToast("Electron bridge is not available.");
   const repositoryPath = await window.codexGuard.chooseRepository();
   if (!repositoryPath) return;
-  state.repository = await window.codexGuard.scanRepository(repositoryPath);
-  state.selectedBranches.clear();
-  renderRepository();
-  await loadBranchRecoveries();
-  await loadAuditEvents();
+  await applyRepositoryScan(await window.codexGuard.scanRepository(repositoryPath));
   showToast(`Scanned ${state.repository.summary.localBranchCount} local branches.`);
+}
+
+async function openRepositoryDialog() {
+  const dialog = $("#repository-dialog");
+  if (!dialog.open) dialog.showModal();
+  await loadGitHubCliAccounts();
+}
+
+function closeRepositoryDialog() {
+  $("#repository-dialog").close();
+}
+
+function renderRepositoryDialog() {
+  const notice = $("#github-cli-notice");
+  const select = $("#github-cli-account");
+  const list = $("#github-repository-list");
+  const account = state.githubCli.accounts.find((item) => item.active) || state.githubCli.accounts[0];
+  if (!state.githubCli.available) {
+    notice.textContent = "GitHub CLI is not signed in. Use gh auth login, then refresh this dialog.";
+    select.innerHTML = `<option>GitHub CLI unavailable</option>`;
+    select.disabled = true;
+    list.innerHTML = `<div class="empty-state">You can still scan a local folder below.</div>`;
+    return;
+  }
+  notice.textContent = `${state.githubCli.accounts.length} GitHub account${state.githubCli.accounts.length === 1 ? "" : "s"} available through your Windows GitHub CLI keyring.`;
+  select.disabled = false;
+  select.innerHTML = state.githubCli.accounts.map((item) => `<option value="${escapeHtml(item.login)}" ${item.active ? "selected" : ""}>${escapeHtml(item.login)}${item.active ? " (active)" : ""}</option>`).join("");
+  if (!state.githubRepositories.length) {
+    list.innerHTML = `<div class="empty-state">Loading repositories for ${escapeHtml(account?.login || "the selected account")}.</div>`;
+    return;
+  }
+  list.innerHTML = state.githubRepositories.map((repository) => `<div class="github-repository-row"><div><strong>${escapeHtml(repository.nameWithOwner)}</strong><span>${repository.isPrivate ? "Private" : "Public"} - updated ${escapeHtml(formatTimestamp(repository.updatedAt))}</span></div><button class="button button-quiet" data-scan-github-repository="${escapeHtml(repository.nameWithOwner)}">Scan</button></div>`).join("");
+}
+
+async function loadGitHubCliAccounts() {
+  if (!window.codexGuard?.getGitHubCliAccounts) return showToast("Electron bridge is not available.");
+  state.githubCli = await window.codexGuard.getGitHubCliAccounts();
+  state.githubRepositories = [];
+  renderRepositoryDialog();
+  const active = state.githubCli.accounts.find((item) => item.active) || state.githubCli.accounts[0];
+  if (active) await loadGitHubRepositories(active.login);
+}
+
+async function loadGitHubRepositories(login) {
+  if (!window.codexGuard?.listGitHubCliRepositories) return;
+  state.githubRepositories = [];
+  renderRepositoryDialog();
+  try {
+    state.githubRepositories = await window.codexGuard.listGitHubCliRepositories(login);
+  } catch {
+    state.githubRepositories = [];
+    showToast("Could not list repositories for that GitHub account.");
+  }
+  renderRepositoryDialog();
+}
+
+async function changeGitHubCliAccount() {
+  const login = $("#github-cli-account").value;
+  if (!login || !window.codexGuard?.switchGitHubCliAccount) return;
+  try {
+    state.githubCli = await window.codexGuard.switchGitHubCliAccount(login);
+    await loadGitHubRepositories(login);
+  } catch {
+    showToast("Could not switch the active GitHub CLI account.");
+  }
+}
+
+async function scanGitHubRepository(repository) {
+  if (!window.codexGuard?.checkoutGitHubCliRepository) return showToast("Electron bridge is not available.");
+  try {
+    const checkout = await window.codexGuard.checkoutGitHubCliRepository(repository);
+    await applyRepositoryScan(await window.codexGuard.scanRepository(checkout.repositoryPath));
+    closeRepositoryDialog();
+    showToast(`${checkout.cached ? "Refreshed" : "Cloned and scanned"} ${checkout.repository}.`);
+  } catch {
+    showToast("Could not prepare and scan that GitHub repository.");
+  }
+}
+
+async function scanLocalAgentWorktrees() {
+  if (!window.codexGuard?.scanLocalAgentWorktrees) return showToast("Electron bridge is not available.");
+  try {
+    state.localWorktreeScan = await window.codexGuard.scanLocalAgentWorktrees();
+    renderLocalWorktrees();
+    const count = state.localWorktreeScan.scans.length;
+    showToast(count ? `Scanned ${count} local Codex or ChatGPT worktree ${count === 1 ? "repository" : "repositories"}.` : "No local Codex or ChatGPT worktrees were found.");
+  } catch {
+    showToast("Could not scan local Codex and ChatGPT worktrees.");
+  }
+}
+
+async function openLocalWorktree(repositoryPath) {
+  const scan = state.localWorktreeScan?.scans?.find((item) => item.repoPath === repositoryPath);
+  if (!scan) return;
+  await applyRepositoryScan(scan);
+  $("#repositories").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function scanCodex() {
@@ -393,6 +520,12 @@ async function scanCodex() {
   } catch {
     showToast("Could not scan local Codex state.");
   }
+}
+
+async function loadDesktopClients() {
+  if (!window.codexGuard?.getDesktopClients) return;
+  state.desktopClients = await window.codexGuard.getDesktopClients();
+  renderDesktopClients();
 }
 
 async function refreshSessionCleanup() {
@@ -649,7 +782,18 @@ $("#api-source-form").addEventListener("submit", addApiSource);
 $("#cancel-api-source").addEventListener("click", closeApiSourceDialog);
 $("#cancel-api-source-bottom").addEventListener("click", closeApiSourceDialog);
 $("#api-source-dialog").addEventListener("close", () => $("#api-source-form").reset());
-$("#scan-repository").addEventListener("click", scanRepository);
+$("#scan-repository").addEventListener("click", openRepositoryDialog);
+$("#scan-local-folder").addEventListener("click", scanManualRepository);
+$("#scan-local-worktrees").addEventListener("click", scanLocalAgentWorktrees);
+$("#close-repository-dialog").addEventListener("click", closeRepositoryDialog);
+$("#close-repository-dialog-bottom").addEventListener("click", closeRepositoryDialog);
+$("#repository-dialog").addEventListener("close", () => { state.githubRepositories = []; });
+$("#refresh-github-cli").addEventListener("click", loadGitHubCliAccounts);
+$("#github-cli-account").addEventListener("change", changeGitHubCliAccount);
+$("#github-repository-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-scan-github-repository]");
+  if (button) scanGitHubRepository(button.dataset.scanGithubRepository);
+});
 $("#delete-selected-branches").addEventListener("click", deleteSelectedLocalBranches);
 $("#scan-codex").addEventListener("click", scanCodex);
 $("#refresh-sessions").addEventListener("click", () => refreshSessionCleanup().catch(() => showToast("Could not refresh local session cleanup.")));
@@ -679,6 +823,10 @@ $("#branch-table").addEventListener("change", (event) => {
 $("#remote-candidate-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-delete-remote-branch]");
   if (button) deleteRemoteBranch(button.dataset.deleteRemoteBranch);
+});
+$("#local-worktree-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-open-local-worktree]");
+  if (button) openLocalWorktree(button.dataset.openLocalWorktree);
 });
 $("#recovery-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-restore-branch]");
@@ -713,3 +861,4 @@ await loadGitHubProfiles();
 await loadBranchRecoveries();
 await loadSessionRecoveries();
 await loadAuditEvents();
+await loadDesktopClients();
